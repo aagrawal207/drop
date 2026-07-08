@@ -1,0 +1,39 @@
+name: FallingBall
+options:
+  bundleIdPrefix: com.agraabhi
+  deploymentTarget:
+    iOS: "17.0"
+settings:
+  base:
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: YES
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    INFOPLIST_KEY_CFBundleDisplayName: Drop
+    INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+    INFOPLIST_KEY_UILaunchScreen_Generation: YES
+    INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+    INFOPLIST_KEY_UIStatusBarHidden: YES
+    # App uses only standard HTTPS/OS crypto — declare exempt so every upload
+    # skips the export-compliance questionnaire.
+    INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+    # The ball is steered by device tilt (CMMotionManager accelerometer).
+    INFOPLIST_KEY_NSMotionUsageDescription: "Drop uses motion to let you steer the ball by tilting your device."
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: W2NS9DM63G
+targets:
+  FallingBall:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+    settings:
+      base:
+        # Explicit, unique bundle ID. The old com.agraabhi.FallingBall was claimed
+        # by a different (personal) team from early on-device installs and can't be
+        # re-registered to the paid team, which also blocked the Game Center App ID.
+        PRODUCT_BUNDLE_IDENTIFIER: com.agraabhi.drop
+    entitlements:
+      path: FallingBall.entitlements
+      properties:
+        com.apple.developer.game-center: true
