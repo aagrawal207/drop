@@ -33,6 +33,13 @@ targets:
         # by a different (personal) team from early on-device installs and can't be
         # re-registered to the paid team, which also blocked the Game Center App ID.
         PRODUCT_BUNDLE_IDENTIFIER: com.agraabhi.drop
+        # iPhone-only. xcodegen defaults iOS app targets to iPhone+iPad ("1,2")
+        # AT THE TARGET LEVEL, so this must live here too (a project-level value
+        # gets overridden). With iPad in the mix, App Store validation demands
+        # all four orientations for iPad multitasking; this game is portrait-only
+        # by design. iPads still run it in iPhone compatibility mode, and no
+        # iPad screenshots are needed in App Store Connect.
+        TARGETED_DEVICE_FAMILY: "1"
     entitlements:
       path: FallingBall.entitlements
       properties:
