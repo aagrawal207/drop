@@ -44,3 +44,26 @@ targets:
       path: FallingBall.entitlements
       properties:
         com.apple.developer.game-center: true
+  # Screenshot/UI automation only — never shipped (test bundles aren't part of
+  # the App Store archive). Drives the game on the simulator and saves
+  # device-resolution PNGs for the store listing.
+  FallingBallUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - UITests
+    dependencies:
+      - target: FallingBall
+schemes:
+  FallingBall:
+    build:
+      targets:
+        FallingBall: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - FallingBallUITests
+    archive:
+      config: Release

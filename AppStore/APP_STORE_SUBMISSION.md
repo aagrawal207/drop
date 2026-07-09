@@ -70,12 +70,13 @@ The accelerometer is used only to steer and never leaves the device, so it is no
 
 ## Screenshots
 
-Required for the 6.9"/6.7" iPhone display; App Store Connect scales down for smaller devices. Four ready-made shots (1320×2868, portrait) are in `AppStore/screenshots/`:
+Required for the 6.9"/6.7" iPhone display; App Store Connect scales down for smaller devices. Five ready-made shots (1320x2868, portrait, captured on the iPhone 17 Pro Max simulator) are in `AppStore/screenshots/`:
 
-1. `01-menu.png` — title screen
-2. `02-gameplay.png` — ball mid-drop, score 7
-3. `03-streak.png` — score 14 with the streak-bonus readout
-4. `04-settings.png` — controls and feedback toggles
+1. `01-menu.png` - title screen with the PLAY and ZEN buttons
+2. `02-gameplay.png` - ball mid-drop, score 32
+3. `03-streak.png` - score 19 with the STREAK x5 +3 readout
+4. `04-settings.png` - controls and feedback toggles
+5. `05-newbest.png` - game over screen with the NEW BEST callout (optional fifth slot)
 
 Upload them under the 6.9" display tab. No marketing frames — what's on screen is what players get.
 
