@@ -5,9 +5,11 @@ struct SettingsView: View {
 
     @State private var sensitivity = GameSettings.shared.sensitivity
     @State private var bounciness = GameSettings.shared.bounciness
+    @State private var zenSpeed = GameSettings.shared.zenSpeed
     @State private var hapticsEnabled = GameSettings.shared.hapticsEnabled
     @State private var scoreSoundEnabled = GameSettings.shared.scoreSoundEnabled
     @State private var bounceSoundEnabled = GameSettings.shared.bounceSoundEnabled
+    @State private var ballColorEnabled = GameSettings.shared.ballColorEnabled
 
     private var version: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -75,10 +77,39 @@ struct SettingsView: View {
                         .onChange(of: scoreSoundEnabled) { _, v in GameSettings.shared.scoreSoundEnabled = v }
                     Toggle("Bounce Sound", isOn: $bounceSoundEnabled)
                         .onChange(of: bounceSoundEnabled) { _, v in GameSettings.shared.bounceSoundEnabled = v }
+                    Toggle("Ball Color Changes", isOn: $ballColorEnabled)
+                        .onChange(of: ballColorEnabled) { _, v in GameSettings.shared.ballColorEnabled = v }
                 } header: {
                     Text("Feedback")
                 } footer: {
-                    Text("Haptics buzz on bounces. Score Sound chimes as points rise — more for a streak bonus. Bounce Sound is a soft knock each time the ball lands.")
+                    Text("Haptics buzz on bounces. Score Sound chimes as points rise — more for a streak bonus. Bounce Sound is a soft knock each time the ball lands. Ball Color Changes shifts the ball's color at high scores; turn it off to keep it red.")
+                }
+
+                Section {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Zen Speed")
+                            Spacer()
+                            Text("\(Int(zenSpeed))")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                        Slider(value: $zenSpeed,
+                               in: GameSettings.minZenSpeed...GameSettings.maxZenSpeed,
+                               step: 5) {
+                            Text("Zen Speed")
+                        } minimumValueLabel: {
+                            Image(systemName: "tortoise.fill").foregroundStyle(.secondary)
+                        } maximumValueLabel: {
+                            Image(systemName: "hare.fill").foregroundStyle(.secondary)
+                        }
+                        .onChange(of: zenSpeed) { _, v in GameSettings.shared.zenSpeed = v }
+                    }
+                    .padding(.vertical, 4)
+                } header: {
+                    Text("Zen Mode")
+                } footer: {
+                    Text("Zen mode holds this speed for the whole run — no ramp-up. Pick your own pace. Zen keeps its own best score and never affects the Game Center leaderboard.")
                 }
 
                 Section {

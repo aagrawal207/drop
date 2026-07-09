@@ -23,7 +23,7 @@ class GameViewController: UIViewController {
         skView.ignoresSiblingOrder = true
         self.scene = scene
 
-        GameCenterManager.shared.authenticate(presenter: self)
+        GameCenterManager.shared.authenticate()
 
         // Auto-pause only on real backgrounding (home, app switch, lock), NOT on
         // willResignActive — that also fires for transient overlays (Control

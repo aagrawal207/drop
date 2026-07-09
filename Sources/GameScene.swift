@@ -8,6 +8,11 @@ private enum GameState {
     case gameOver
 }
 
+private enum GameMode {
+    case ranked   // Normal: ramping speed, feeds Game Center + achievements.
+    case zen      // Relaxed: constant player-chosen speed, own local best.
+}
+
 private struct Category {
     static let ball: UInt32 = 0x1 << 0
     static let floor: UInt32 = 0x1 << 1
@@ -44,7 +49,15 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private let followBias: CGFloat = 0.14
     private let milestoneEvery = 10
 
-    private var state: GameState = .menu
+    private var state: GameState = .menu {
+        didSet {
+            // Keep the screen awake only while actively playing. A player steering
+            // by tilt never touches the screen, so without this the idle timer
+            // dims and locks the device mid-run. Re-enabled on menu/pause/gameOver
+            // so the phone still sleeps normally when not in a live game.
+            UIApplication.shared.isIdleTimerDisabled = (state == .playing)
+        }
+    }
 
     private let cam = SKCameraNode()
     private let ball = SKNode()                  // physics container
@@ -56,6 +69,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var camSpeed: CGFloat = 120
     private var scriptedCamY: CGFloat = 0
     private var elapsed: TimeInterval = 0
+    /// Seconds of this run already flushed into totalTimePlayed. Banking happens
+    /// at pause and at game over (delta-based, so it never double-counts).
+    /// Banking at pause matters: quitting via pause -> Main Menu, or the OS
+    /// killing a backgrounded (auto-paused) app, used to drop the whole run's
+    /// time because it was only ever added in endGame. We can't just zero
+    /// `elapsed` when banking — it also drives the ranked difficulty ramp.
+    private var bankedPlaytime: TimeInterval = 0
     private var lastUpdate: TimeInterval = 0
     private var lastLandHaptic: TimeInterval = 0
     /// Ball velocity sampled at the top of update(), i.e. BEFORE the physics
@@ -64,15 +84,28 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     /// from here instead. Without this, bounce haptics fire only intermittently.
     private var preStepVelocity: CGVector = .zero
 
+    private var mode: GameMode = .ranked
     private var score = 0
     /// Consecutive holes reached in a single bounce (a "clean" pass).
     private var cleanStreak = 0
+    /// Longest clean streak reached this run (for the streak achievements).
+    private var bestStreakThisRun = 0
     /// Floor bounces since the last hole was cleared. 0 = reached it in one drop.
     private var bouncesSinceGap = 0
     /// Clean passes needed before the escalating bonus kicks in.
     private let streakBonusThreshold = 3
     private var nextMilestone = 10
-    private var highScore = UserDefaults.standard.integer(forKey: "highScore")
+    /// Ball colour tier currently shown (see BallPalette); reset each run.
+    private var ballTier = 0
+
+    /// The high score for the active mode (ranked feeds Game Center; zen is local).
+    private var highScore: Int {
+        get { mode == .zen ? GameSettings.shared.zenBest : GameSettings.shared.rankedBest }
+        set {
+            if mode == .zen { GameSettings.shared.zenBest = newValue }
+            else { GameSettings.shared.rankedBest = newValue }
+        }
+    }
 
     // Controls
     private let motion = CMMotionManager()
@@ -85,7 +118,14 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var overlay: SKNode?
     private var gearNode: SKLabelNode?
     private var leaderboardNode: SKLabelNode?
+    private var playButton: SKNode?
+    private var zenButton: SKNode?
+    private var menuButton: SKLabelNode?
     private var pauseButton: SKLabelNode?
+    /// Small "ZEN" badge under the score during zen runs, so the player always
+    /// knows whether the run counts for the leaderboard. Ranked is the default
+    /// and gets no badge — labeling the exception is enough.
+    private let modeBadge = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
 
     // Cached procedural textures.
     private lazy var plankTexture = WoodTexture.plank(width: size.width, height: floorHeight)
@@ -112,6 +152,21 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         HapticsManager.shared.prepare()
 
         showMenu()
+        warmUp()
+    }
+
+    /// Pre-warm the expensive-on-first-use subsystems while the menu is up, so the
+    /// first play doesn't hitch. The audio session/engine activation and the first
+    /// haptic pattern are the main offenders; the ball colour textures are cached
+    /// here too so a mid-run tier change never renders on the game thread.
+    private func warmUp() {
+        SoundManager.shared.warmUp()
+        HapticsManager.shared.restartIfNeeded()
+        // Cache the colour-tier textures now (tiny, main-thread; the cache isn't
+        // thread-safe) so a mid-run tier change never renders during play.
+        for tier in BallPalette.tiers.indices {
+            _ = BallPalette.texture(tier: tier, radius: ballRadius)
+        }
     }
 
     // MARK: - Setup
@@ -191,6 +246,15 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         comboLabel.zPosition = 10
         comboLabel.isHidden = true
         cam.addChild(comboLabel)
+
+        modeBadge.text = "ZEN"
+        modeBadge.fontSize = 13
+        modeBadge.fontColor = SKColor(red: 0.55, green: 0.8, blue: 0.95, alpha: 0.7)
+        modeBadge.horizontalAlignmentMode = .center
+        modeBadge.verticalAlignmentMode = .top
+        modeBadge.zPosition = 10
+        modeBadge.isHidden = true
+        cam.addChild(modeBadge)
     }
 
     /// Place the score just below the safe-area top inset (clears Dynamic Island).
@@ -199,7 +263,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let topInset = view?.safeAreaInsets.top ?? 59
         let inset = topInset > 0 ? topInset : 59
         scoreLabel.position = CGPoint(x: 0, y: size.height / 2 - inset - 12)
-        comboLabel.position = CGPoint(x: 0, y: size.height / 2 - inset - 62)
+        modeBadge.position = CGPoint(x: 0, y: size.height / 2 - inset - 64)
+        comboLabel.position = CGPoint(x: 0, y: size.height / 2 - inset - 84)
     }
 
     private func startMotion() {
@@ -280,6 +345,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private func showMenu() {
         state = .menu
         scoreLabel.isHidden = true
+        modeBadge.isHidden = true
         ball.physicsBody?.isDynamic = false
         ball.position = CGPoint(x: size.width / 2, y: cam.position.y + size.height * 0.12)
 
@@ -293,26 +359,47 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         title.position = CGPoint(x: 0, y: size.height * 0.12)
         node.addChild(title)
 
-        let hint = SKLabelNode(fontNamed: "AvenirNext-Medium")
-        hint.text = "Tap to start"
-        hint.fontSize = 22
-        hint.fontColor = SKColor(white: 0.85, alpha: 1)
-        hint.position = CGPoint(x: 0, y: 0)
-        node.addChild(hint)
+        // Explicit mode buttons. The old menu started a ranked run on ANY tap
+        // (with zen as a bare text line) — easy to mis-tap into a scored run,
+        // and easy to never notice zen existed. Two visible pills fix both:
+        // filled red = primary (ranked), outlined blue = secondary (zen).
+        let play = makePill(text: "PLAY", name: "play",
+                            fill: SKColor(red: 0.85, green: 0.25, blue: 0.20, alpha: 1),
+                            stroke: .clear,
+                            textColor: .white)
+        play.position = CGPoint(x: 0, y: 8)
+        node.addChild(play)
+        playButton = play
+
+        let zenBlue = SKColor(red: 0.55, green: 0.8, blue: 0.95, alpha: 1)
+        let zen = makePill(text: "🧘 ZEN", name: "zen",
+                           fill: SKColor(white: 0, alpha: 0.3),
+                           stroke: zenBlue,
+                           textColor: zenBlue)
+        zen.position = CGPoint(x: 0, y: -64)
+        node.addChild(zen)
+        zenButton = zen
 
         let ctl = SKLabelNode(fontNamed: "AvenirNext-Regular")
         ctl.text = "Tilt or touch left / right to steer"
         ctl.fontSize = 16
         ctl.fontColor = SKColor(white: 0.7, alpha: 1)
-        ctl.position = CGPoint(x: 0, y: -size.height * 0.06)
+        ctl.position = CGPoint(x: 0, y: -size.height * 0.13)
         node.addChild(ctl)
 
-        if highScore > 0 {
+        let rankedBest = GameSettings.shared.rankedBest
+        let zenBest = GameSettings.shared.zenBest
+        if rankedBest > 0 || zenBest > 0 {
             let hs = SKLabelNode(fontNamed: "AvenirNext-Medium")
-            hs.text = "Best: \(highScore)"
-            hs.fontSize = 20
+            // Only show the components that exist — a zen-only player used to
+            // see a bogus "Best 0" in front of their zen best.
+            var parts: [String] = []
+            if rankedBest > 0 { parts.append("Best \(rankedBest)") }
+            if zenBest > 0 { parts.append("Zen \(zenBest)") }
+            hs.text = parts.joined(separator: "   •   ")
+            hs.fontSize = 18
             hs.fontColor = SKColor(red: 1.0, green: 0.5, blue: 0.42, alpha: 1)
-            hs.position = CGPoint(x: 0, y: -size.height * 0.12)
+            hs.position = CGPoint(x: 0, y: -size.height * 0.17)
             node.addChild(hs)
         }
 
@@ -352,6 +439,27 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         leaderboardNode = lb
     }
 
+    /// A pill-shaped button: rounded SKShapeNode with a centered label. 56pt
+    /// tall (clears the 44pt minimum tap target) and the visible shape IS the
+    /// hit area, so affordance and tap target finally coincide.
+    private func makePill(text: String, name: String,
+                          fill: SKColor, stroke: SKColor, textColor: SKColor) -> SKNode {
+        let pill = SKShapeNode(rectOf: CGSize(width: 220, height: 56), cornerRadius: 28)
+        pill.fillColor = fill
+        pill.strokeColor = stroke
+        pill.lineWidth = stroke == .clear ? 0 : 2
+        pill.name = name
+
+        let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        label.text = text
+        label.fontSize = 24
+        label.fontColor = textColor
+        label.verticalAlignmentMode = .center
+        label.name = name           // taps on the label count as the button
+        pill.addChild(label)
+        return pill
+    }
+
     /// If the tap hit the gear or leaderboard button, handle it and return true.
     private func handleButtonTap(_ touches: Set<UITouch>) -> Bool {
         guard let t = touches.first else { return false }
@@ -369,24 +477,51 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         return false
     }
 
-    private func startGame() {
+    /// If the tap hit the "Main Menu" button, return to the menu and return true.
+    private func handleMenuButtonTap(_ touches: Set<UITouch>) -> Bool {
+        guard let t = touches.first, let btn = menuButton,
+              btn.frame.insetBy(dx: -24, dy: -18).contains(t.location(in: cam)) else { return false }
+        HapticsManager.shared.uiTap()
+        returnToMenu()
+        return true
+    }
+
+    /// Press feedback on a mode pill (quick scale dip), then start the run.
+    private func pressAndStart(_ button: SKNode, mode: GameMode) {
+        HapticsManager.shared.uiTap()
+        button.run(.sequence([
+            .scale(to: 0.93, duration: 0.06),
+            .scale(to: 1.0, duration: 0.06),
+            .run { [weak self] in self?.startGame(mode: mode) },
+        ]))
+    }
+
+    private func startGame(mode: GameMode) {
+        self.mode = mode
         overlay?.removeFromParent()
         overlay = nil
         gearNode = nil
         leaderboardNode = nil
+        playButton = nil
+        zenButton = nil
+        menuButton = nil
         state = .playing
 
         floors.forEach { $0.removeFromParent() }
         floors.removeAll()
-        camSpeed = baseCamSpeed
+        camSpeed = mode == .zen ? CGFloat(GameSettings.shared.zenSpeed) : baseCamSpeed
         elapsed = 0
+        bankedPlaytime = 0
         score = 0
         cleanStreak = 0
+        bestStreakThisRun = 0
         bouncesSinceGap = 0
         nextMilestone = milestoneEvery
+        setBallTier(0, animated: false)   // back to the classic red each run
         scoreLabel.text = "0"
         scoreLabel.isHidden = false
         comboLabel.isHidden = true
+        modeBadge.isHidden = mode != .zen   // badge the exception, not the default
         positionScoreLabel()
         addPauseButton()
 
@@ -430,11 +565,20 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // MARK: - Pause
 
+    /// Flush any not-yet-banked run time into the lifetime total.
+    private func bankPlaytime() {
+        let delta = elapsed - bankedPlaytime
+        guard delta > 0 else { return }
+        GameSettings.shared.totalTimePlayed += delta
+        bankedPlaytime = elapsed
+    }
+
     func pauseGame() {
         guard state == .playing else { return }
         state = .paused
         physicsWorld.speed = 0
         pauseButton?.isHidden = true
+        bankPlaytime()   // covers quit-via-menu and app kill while backgrounded
 
         let node = SKNode()
         node.zPosition = 20
@@ -457,11 +601,50 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         resume.position = CGPoint(x: 0, y: -size.height * 0.02)
         node.addChild(resume)
 
-        // Settings gear on the pause screen, so players can tweak controls/sound
-        // mid-run without ending the game.
+        // Main Menu button — lets the player quit the run and switch modes without
+        // restarting the app.
+        addMenuButton(to: node, y: -size.height * 0.12)
+
+        // Settings gear and leaderboard on the pause screen, so players can tweak
+        // settings or check scores mid-run without ending the game.
         addGear(to: node)
+        addLeaderboardButton(to: node)
         cam.addChild(node)
         overlay = node
+    }
+
+    /// A "Main Menu" text button used on the pause and game-over overlays.
+    private func addMenuButton(to node: SKNode, y: CGFloat) {
+        let btn = SKLabelNode(fontNamed: "AvenirNext-Medium")
+        btn.text = "Main Menu"
+        btn.fontSize = 20
+        btn.fontColor = SKColor(white: 0.7, alpha: 1)
+        btn.verticalAlignmentMode = .center
+        btn.position = CGPoint(x: 0, y: y)
+        btn.name = "mainmenu"
+        node.addChild(btn)
+        menuButton = btn
+    }
+
+    /// Tear down the current overlay and return to the main menu (from pause or
+    /// game over), so the player can pick the other mode.
+    private func returnToMenu() {
+        overlay?.removeFromParent()
+        overlay = nil
+        gearNode = nil
+        leaderboardNode = nil
+        menuButton = nil
+        pauseButton?.removeFromParent()
+        pauseButton = nil
+        physicsWorld.speed = 1        // in case we came from pause
+        ball.physicsBody?.isDynamic = false
+        scoreLabel.isHidden = true
+        comboLabel.isHidden = true
+        setBallTier(0, animated: false)
+        floors.forEach { $0.removeFromParent() }
+        floors.removeAll()
+        cam.position = CGPoint(x: size.width / 2, y: 0)
+        showMenu()
     }
 
     func resumeGame() {
@@ -481,8 +664,14 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         pauseButton?.removeFromParent()
         pauseButton = nil
         comboLabel.isHidden = true
+        modeBadge.isHidden = true   // the overlay's "ZEN OVER" title carries the mode
         HapticsManager.shared.gameOver()
-        onGameOver?(score)
+
+        // Lifetime time played (both modes) — the part not already banked at pause.
+        bankPlaytime()
+
+        // Ranked scores feed Game Center; Zen never does (self-set speed).
+        if mode == .ranked { onGameOver?(score) }
 
         // Juice: screen shake + white flash.
         cam.run(.sequence([
@@ -497,27 +686,41 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         cam.addChild(flash)
         flash.run(.sequence([.fadeOut(withDuration: 0.35), .removeFromParent()]))
 
-        if score > highScore {
-            highScore = score
-            UserDefaults.standard.set(highScore, forKey: "highScore")
+        // Capture BEFORE updating the best — otherwise "Score: 42  Best: 42"
+        // gives no hint the run just set a record.
+        let isNewBest = score > highScore
+        if isNewBest {
+            highScore = score                       // routes to ranked or zen best
+            if mode == .zen { GameSettings.shared.zenBestDuration = elapsed }
+            else { GameSettings.shared.rankedBestDuration = elapsed }
         }
 
         let node = SKNode()
         node.zPosition = 20
 
         let over = SKLabelNode(fontNamed: "AvenirNext-Heavy")
-        over.text = "GAME OVER"
+        over.text = mode == .zen ? "ZEN OVER" : "GAME OVER"
         over.fontSize = 40
         over.fontColor = .white
         over.position = CGPoint(x: 0, y: size.height * 0.08)
         node.addChild(over)
 
         let sc = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        sc.text = "Score: \(score)   Best: \(highScore)"
+        sc.text = isNewBest ? "NEW BEST: \(score)!"
+                            : "Score: \(score)   Best: \(highScore)"
         sc.fontSize = 22
-        sc.fontColor = SKColor(white: 0.85, alpha: 1)
+        sc.fontColor = isNewBest ? SKColor(red: 1.0, green: 0.78, blue: 0.28, alpha: 1)
+                                 : SKColor(white: 0.85, alpha: 1)
         sc.position = CGPoint(x: 0, y: 0)
         node.addChild(sc)
+        if isNewBest {
+            // A little pop so the record run registers as a moment.
+            sc.setScale(0.1)
+            sc.run(.sequence([
+                .scale(to: 1.25, duration: 0.22),
+                .scale(to: 1.0, duration: 0.12),
+            ]))
+        }
 
         let again = SKLabelNode(fontNamed: "AvenirNext-Medium")
         again.text = "Tap to play again"
@@ -525,6 +728,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         again.fontColor = SKColor(red: 1.0, green: 0.5, blue: 0.42, alpha: 1)
         again.position = CGPoint(x: 0, y: -size.height * 0.06)
         node.addChild(again)
+
+        // Main Menu button, so the player can switch modes instead of replaying.
+        addMenuButton(to: node, y: -size.height * 0.12)
 
         addGear(to: node)
         addLeaderboardButton(to: node)
@@ -537,19 +743,28 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         switch state {
         case .menu:
-            // Gear / leaderboard taps handled first; anything else starts.
+            // Gear / leaderboard taps handled first.
             if handleButtonTap(touches) { return }
-            HapticsManager.shared.uiTap()
-            startGame()
+            // Explicit mode buttons only — no implicit start. A stray tap must
+            // not launch a ranked (leaderboard-scored) run by accident.
+            guard let t = touches.first else { return }
+            let p = t.location(in: cam)
+            if let play = playButton, play.frame.insetBy(dx: -10, dy: -10).contains(p) {
+                pressAndStart(play, mode: .ranked)
+            } else if let zen = zenButton, zen.frame.insetBy(dx: -10, dy: -10).contains(p) {
+                pressAndStart(zen, mode: .zen)
+            }
         case .gameOver:
             if handleButtonTap(touches) { return }
+            if handleMenuButtonTap(touches) { return }
             HapticsManager.shared.uiTap()
             overlay?.removeFromParent()
             overlay = nil
-            startGame()
+            startGame(mode: mode)   // replay the same mode
         case .paused:
-            // Gear opens settings; any other tap resumes.
+            // Gear / leaderboard / Main Menu handled first; any other tap resumes.
             if handleButtonTap(touches) { return }
+            if handleMenuButtonTap(touches) { return }
             resumeGame()
         case .playing:
             // Pause button tap, else steer.
@@ -594,7 +809,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         preStepVelocity = ball.physicsBody?.velocity ?? .zero
 
         elapsed += dt
-        camSpeed = camSpeed(for: elapsed)
+        // Ranked ramps up over time; Zen holds the player's chosen speed.
+        camSpeed = mode == .zen ? CGFloat(GameSettings.shared.zenSpeed)
+                                : camSpeed(for: elapsed)
 
         // The camera descends at a steady, ever-increasing rate so the floors
         // scroll up consistently regardless of what the ball is doing — the
@@ -658,6 +875,11 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
         if clean {
             cleanStreak += 1
+            bestStreakThisRun = max(bestStreakThisRun, cleanStreak)
+            if mode == .ranked {
+                GameSettings.shared.totalCleanPasses += 1
+                reportCleanPassAchievements()
+            }
             if cleanStreak >= streakBonusThreshold {
                 let bonus = cleanStreak - (streakBonusThreshold - 1)   // 1, 2, 3, …
                 gained += bonus
@@ -669,6 +891,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         score += gained
         scoreLabel.text = "\(score)"
         bouncesSinceGap = 0                         // reset for the next hole
+        updateBallTier()                            // colour warms/cools with score
+        if mode == .ranked { reportScoreAchievements() }
 
         // Combo readout, shown once the escalating bonus is live.
         if cleanStreak >= streakBonusThreshold {
@@ -704,6 +928,45 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             .colorize(with: .white, colorBlendFactor: 0.6, duration: 0.08),
             .colorize(withColorBlendFactor: 0, duration: 0.25),
         ]))
+    }
+
+    // MARK: - Ball colour (live progress)
+
+    /// Swap the ball to the colour tier its score has reached, if it changed.
+    /// No-op when the player has turned colour changes off.
+    private func updateBallTier() {
+        guard GameSettings.shared.ballColorEnabled else { return }
+        let t = BallPalette.tierIndex(for: score)
+        guard t != ballTier else { return }
+        setBallTier(t, animated: true)
+    }
+
+    /// Apply a colour tier. Animated swaps do a quick scale pop so the change
+    /// reads as a reward rather than a flicker.
+    private func setBallTier(_ tier: Int, animated: Bool) {
+        ballTier = tier
+        ballSprite.texture = BallPalette.texture(tier: tier, radius: ballRadius)
+        if animated {
+            ballSprite.removeAllActions()
+            ballSprite.setScale(1.28)
+            ballSprite.run(.scale(to: 1.0, duration: 0.18))
+        }
+    }
+
+    // MARK: - Achievements (ranked mode only)
+
+    private func reportScoreAchievements() {
+        if score >= 25  { GameCenterManager.shared.report(.score25) }
+        if score >= 50  { GameCenterManager.shared.report(.score50) }
+        if score >= 100 { GameCenterManager.shared.report(.score100) }
+    }
+
+    private func reportCleanPassAchievements() {
+        if cleanStreak >= 5  { GameCenterManager.shared.report(.streak5) }
+        if cleanStreak >= 10 { GameCenterManager.shared.report(.streak10) }
+        if GameSettings.shared.totalCleanPasses >= 100 {
+            GameCenterManager.shared.report(.cleanTotal100)
+        }
     }
 
     // MARK: - Contacts

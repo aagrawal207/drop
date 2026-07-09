@@ -1,31 +1,39 @@
 import SwiftUI
 
-/// Local scores sheet shown by the trophy button. Always works offline (shows
-/// the on-device best). Offers the Game Center global leaderboard only when the
-/// player is actually signed in — otherwise that entry is hidden, so the button
-/// is never a dead tap.
+/// Local scores + stats sheet shown by the trophy button. Always works offline
+/// (shows on-device bests and lifetime stats). Offers the Game Center global
+/// leaderboard only when the player is actually signed in — otherwise that entry
+/// is hidden, so the button is never a dead tap.
 struct ScoresView: View {
     var gameCenterAvailable: Bool
     var onShowGameCenter: () -> Void
     var onDone: () -> Void
 
-    private var best: Int { UserDefaults.standard.integer(forKey: "highScore") }
+    private let settings = GameSettings.shared
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    HStack {
-                        Label("Best Score", systemImage: "trophy.fill")
-                            .foregroundStyle(.orange)
-                        Spacer()
-                        Text("\(best)")
-                            .font(.title3.bold())
-                            .monospacedDigit()
-                    }
-                    .padding(.vertical, 2)
+                    bestRow(title: "Ranked Best",
+                            icon: "trophy.fill", tint: .orange,
+                            score: settings.rankedBest,
+                            duration: settings.rankedBestDuration)
+                    bestRow(title: "Zen Best",
+                            icon: "leaf.fill", tint: .green,
+                            score: settings.zenBest,
+                            duration: settings.zenBestDuration)
+                } header: {
+                    Text("Best Scores")
                 } footer: {
-                    Text("Your best is saved on this device.")
+                    Text("Ranked is the classic speed-up mode and the only one that counts on the global leaderboard. Zen holds a speed you choose. Times show how long that best run lasted.")
+                }
+
+                Section {
+                    statRow("Total time played", value: longDuration(settings.totalTimePlayed))
+                    statRow("Clean passes", value: "\(settings.totalCleanPasses)")
+                } header: {
+                    Text("Lifetime")
                 }
 
                 if gameCenterAvailable {
@@ -34,7 +42,7 @@ struct ScoresView: View {
                             Label("View Global Leaderboard", systemImage: "globe")
                         }
                     } footer: {
-                        Text("Compare your best with players worldwide via Game Center.")
+                        Text("Compare your ranked best with players worldwide via Game Center.")
                     }
                 } else {
                     Section {
@@ -52,5 +60,49 @@ struct ScoresView: View {
                 }
             }
         }
+    }
+
+    private func bestRow(title: String, icon: String, tint: Color,
+                         score: Int, duration: Double) -> some View {
+        HStack {
+            Label(title, systemImage: icon)
+                .foregroundStyle(tint)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("\(score)")
+                    .font(.title3.bold())
+                    .monospacedDigit()
+                if score > 0 && duration > 0 {
+                    Text("in \(shortDuration(duration))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func statRow(_ title: String, value: String) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value).foregroundStyle(.secondary).monospacedDigit()
+        }
+    }
+
+    /// "1m 23s" style for a single run.
+    private func shortDuration(_ s: Double) -> String {
+        let t = Int(s.rounded())
+        return t < 60 ? "\(t)s" : "\(t / 60)m \(t % 60)s"
+    }
+
+    /// "2h 5m" / "5m" style for a lifetime total.
+    private func longDuration(_ s: Double) -> String {
+        let t = Int(s.rounded())
+        let h = t / 3600, m = (t % 3600) / 60, sec = t % 60
+        if h > 0 { return "\(h)h \(m)m" }
+        if m > 0 { return "\(m)m \(sec)s" }
+        return "\(sec)s"
     }
 }

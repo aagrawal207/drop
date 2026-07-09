@@ -21,7 +21,10 @@ final class SoundManager {
     // Pre-rendered buffers.
     private var blips: [AVAudioPCMBuffer] = []   // rising notes for +1/+2/+3
     private var chime: AVAudioPCMBuffer!         // the "big" sound for +4 and up
-    private var bounceBuf: AVAudioPCMBuffer!     // wooden tok for a bounce
+    /// Wooden toks at three impact intensities (soft / medium / hard). A hard
+    /// hit isn't just louder — it's brighter and rings a touch longer, which is
+    /// how the ear judges impact energy. Selected by impact speed in bounce().
+    private var bounceBufs: [AVAudioPCMBuffer] = []
 
     private init() {
         renderBuffers()
@@ -54,17 +57,41 @@ final class SoundManager {
         }
     }
 
-    /// Play the bounce "tok", volume scaled by impact speed (matches the haptic).
+    /// Play the bounce "tok". Two things scale with impact speed so big bounces
+    /// read clearly bigger than small ones:
+    /// - the buffer: soft (dull, short) / medium / hard (brighter, longer),
+    /// - the gain, mapped in the dB domain. Linear gain crams most of the
+    ///   audible change into the bottom of the range; equal dB steps give equal
+    ///   perceived-loudness steps. 24 dB of range: whisper 0.06 ... full 1.0.
+    /// Uses the same normalizer as HapticsManager.land so ear and hand agree.
     func bounce(velocity: CGFloat) {
         guard GameSettings.shared.bounceSoundEnabled else { return }
-        let speed = min(max(Float(abs(velocity)), 40), 1000)
-        let t = (speed - 40) / (1000 - 40)          // 0...1
-        play(bounceBuf, volume: 0.25 + 0.55 * t)    // 0.25 ... 0.80
+        let e = Self.impactNormalized(velocity)
+        let buf = bounceBufs[e < 0.35 ? 0 : e < 0.75 ? 1 : 2]
+        let gainDB = -24 + 24 * e                   // -24 dB ... 0 dB
+        play(buf, volume: pow(10, gainDB / 20))     // 0.063 ... 1.0
+    }
+
+    /// Impact speed -> 0...1, identical to the haptic mapping in
+    /// HapticsManager.land (range 60...1000, ease-out for arcade punch in the
+    /// low-mid range). Keep the two in sync — a mismatch makes a landing feel
+    /// big in the hand but sound small, or vice versa.
+    static func impactNormalized(_ velocity: CGFloat) -> Float {
+        let speed = Float(min(max(abs(velocity), 60), 1000))
+        let t = (speed - 60) / (1000 - 60)
+        return t * (2 - t)                           // ease-out
     }
 
     /// Rebuild the audio session/engine when returning to the foreground; the
     /// system tears audio down on backgrounding.
     func restartIfNeeded() {
+        ensureRunning()
+    }
+
+    /// Activate the audio session + start the engine ahead of time (call at
+    /// launch, while the menu is up). Activating the AVAudioSession on the first
+    /// sound is the main cause of a hitch at the start of the first run.
+    func warmUp() {
         ensureRunning()
     }
 
@@ -128,9 +155,22 @@ final class SoundManager {
         // not a jackpot sparkle.
         chime = tone(partials: [(523.25, 0.7), (784.00, 0.18)],   // C5 + soft G5
                      duration: 0.42, decay: 9, attack: 0.010)
-        // Wooden "tok": low, slightly inharmonic, very fast decay.
-        bounceBuf = tone(partials: [(196, 0.6), (300, 0.24), (470, 0.14)],
-                         duration: 0.09, decay: 38, attack: 0.001)
+        // Wooden "tok" at three intensities. All share the low ~196 Hz body so
+        // they read as the same object; what changes is brightness (upper
+        // partials), length, and decay — a soft graze is dull and dead, a hard
+        // slam is brighter with a slightly dropped fundamental (big objects
+        // ring lower) and a longer tail.
+        bounceBufs = [
+            // soft: dull, very short
+            tone(partials: [(196, 0.6), (300, 0.15)],
+                 duration: 0.06, decay: 48, attack: 0.001),
+            // medium: the classic tok
+            tone(partials: [(196, 0.6), (300, 0.24), (470, 0.14)],
+                 duration: 0.09, decay: 38, attack: 0.001),
+            // hard: brighter, pitch-dropped, longer body
+            tone(partials: [(185, 0.7), (300, 0.30), (470, 0.22), (760, 0.12)],
+                 duration: 0.13, decay: 26, attack: 0.001),
+        ]
     }
 
     /// Sum sine partials under a fast-attack / exponential-decay envelope.

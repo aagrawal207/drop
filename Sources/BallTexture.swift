@@ -1,12 +1,33 @@
 import UIKit
 import SpriteKit
 
-/// A glossy red sphere drawn procedurally: radial base shading for volume,
-/// a bright off-center specular highlight for the shine, and a darkened rim.
-/// Rendered oversized (with padding) so the highlight/rim aren't clipped.
+/// A glossy sphere drawn procedurally: radial base shading for volume, a bright
+/// off-center specular highlight for the shine, and a darkened rim. Rendered
+/// oversized (with padding) so the highlight/rim aren't clipped.
 enum BallTexture {
 
+    /// The classic red ball (tier 0). Exact colours preserved.
     static func glossyRed(radius: CGFloat) -> SKTexture {
+        render(radius: radius,
+               lit: UIColor(red: 1.00, green: 0.42, blue: 0.38, alpha: 1),
+               mid: UIColor(red: 0.86, green: 0.16, blue: 0.14, alpha: 1),
+               shadow: UIColor(red: 0.45, green: 0.04, blue: 0.05, alpha: 1))
+    }
+
+    /// A glossy sphere tinted from a single vivid base colour. The lit and shadow
+    /// stops are derived from the tint in HSB, so every colour tier keeps the same
+    /// shaded, shiny look as the red one.
+    static func glossy(radius: CGFloat, tint: UIColor) -> SKTexture {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        tint.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        let lit = UIColor(hue: h, saturation: max(0, s * 0.42),
+                          brightness: min(1, b * 1.10 + 0.18), alpha: 1)
+        let shadow = UIColor(hue: h, saturation: min(1, s * 1.05),
+                             brightness: b * 0.34, alpha: 1)
+        return render(radius: radius, lit: lit, mid: tint, shadow: shadow)
+    }
+
+    private static func render(radius: CGFloat, lit: UIColor, mid: UIColor, shadow: UIColor) -> SKTexture {
         let scale: CGFloat = 3                       // crisp on retina
         let d = radius * 2
         let size = CGSize(width: d, height: d)
@@ -24,17 +45,13 @@ enum BallTexture {
             ctx.clip()
 
             // Base sphere shading: lit upper-left, dark lower-right.
-            let colors = [
-                UIColor(red: 1.00, green: 0.42, blue: 0.38, alpha: 1).cgColor, // lit
-                UIColor(red: 0.86, green: 0.16, blue: 0.14, alpha: 1).cgColor, // mid
-                UIColor(red: 0.45, green: 0.04, blue: 0.05, alpha: 1).cgColor  // shadow rim
-            ] as CFArray
+            let colors = [lit.cgColor, mid.cgColor, shadow.cgColor] as CFArray
             let space = CGColorSpaceCreateDeviceRGB()
             if let grad = CGGradient(colorsSpace: space, colors: colors,
                                      locations: [0.0, 0.55, 1.0]) {
-                let lit = CGPoint(x: d * 0.35, y: d * 0.32)
+                let litPoint = CGPoint(x: d * 0.35, y: d * 0.32)
                 ctx.drawRadialGradient(grad,
-                                       startCenter: lit, startRadius: 0,
+                                       startCenter: litPoint, startRadius: 0,
                                        endCenter: center, endRadius: d * 0.62,
                                        options: [.drawsAfterEndLocation])
             }
@@ -82,5 +99,38 @@ enum BallTexture {
             }
         }
         return SKTexture(image: image)
+    }
+}
+
+/// The ball stays the classic red until the score is high, then shifts colour at
+/// widely-spaced milestones — a rare, earned reward rather than a constant churn.
+/// Nothing changes before 100. Tier 0 is the classic red; a `nil` tint means
+/// "use glossyRed" so the default ball is byte-for-byte unchanged.
+enum BallPalette {
+    static let tiers: [(minScore: Int, tint: UIColor?)] = [
+        (0,   nil),                                                   // red (classic)
+        (100, UIColor(red: 1.00, green: 0.80, blue: 0.12, alpha: 1)), // gold
+        (200, UIColor(red: 0.13, green: 0.72, blue: 0.72, alpha: 1)), // teal
+        (350, UIColor(red: 0.26, green: 0.52, blue: 0.96, alpha: 1)), // blue
+        (500, UIColor(red: 0.62, green: 0.35, blue: 0.96, alpha: 1)), // violet
+    ]
+
+    /// The highest tier whose threshold the score has reached.
+    static func tierIndex(for score: Int) -> Int {
+        var idx = 0
+        for (i, t) in tiers.enumerated() where score >= t.minScore { idx = i }
+        return idx
+    }
+
+    private static var cache: [Int: SKTexture] = [:]
+
+    /// Cached texture for a tier (radius is fixed in practice).
+    static func texture(tier: Int, radius: CGFloat) -> SKTexture {
+        if let cached = cache[tier] { return cached }
+        let tint = tiers[tier].tint
+        let tex = tint.map { BallTexture.glossy(radius: radius, tint: $0) }
+            ?? BallTexture.glossyRed(radius: radius)
+        cache[tier] = tex
+        return tex
     }
 }
