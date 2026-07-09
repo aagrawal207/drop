@@ -16,7 +16,9 @@ final class SoundManager {
     private let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
     private var players: [AVAudioPlayerNode] = []
     private var nextPlayer = 0
-    private var configured = false
+    /// True while the AVAudioSession is (believed) configured and active. Reset
+    /// on interruption-ended so the session is re-activated, not just restarted.
+    private var sessionActive = false
 
     // Pre-rendered buffers.
     private var blips: [AVAudioPCMBuffer] = []   // rising notes for +1/+2/+3
@@ -29,6 +31,30 @@ final class SoundManager {
     private init() {
         renderBuffers()
         buildGraph()
+        // The system deactivates our session on interruptions (calls, Siri) and
+        // stops the engine on route changes (unplugging headphones). The lazy
+        // ensureRunning() before each play self-heals eventually, but the first
+        // sound after such an event can be swallowed if engine.start() fails
+        // that frame. Rebuild eagerly instead.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(handleInterruption(_:)),
+            name: AVAudioSession.interruptionNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(handleRouteChange),
+            name: AVAudioSession.routeChangeNotification, object: nil)
+    }
+
+    @objc private func handleInterruption(_ note: Notification) {
+        guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              AVAudioSession.InterruptionType(rawValue: raw) == .ended else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.sessionActive = false   // force re-activation, not just restart
+            self?.ensureRunning()
+        }
+    }
+
+    @objc private func handleRouteChange() {
+        DispatchQueue.main.async { [weak self] in self?.ensureRunning() }
     }
 
     // MARK: - Public API
@@ -111,13 +137,19 @@ final class SoundManager {
     /// every player node is running. Called before each sound so an interruption
     /// or route change (which stops the engine) self-heals on the next play.
     private func ensureRunning() {
-        if !configured {
+        if !sessionActive {
             let session = AVAudioSession.sharedInstance()
             // .ambient => obeys the mute switch and mixes with other audio, which
             // is the right manners for a casual game's sound effects.
-            try? session.setCategory(.ambient, options: [.mixWithOthers])
-            try? session.setActive(true)
-            configured = true
+            do {
+                try session.setCategory(.ambient, options: [.mixWithOthers])
+                try session.setActive(true)
+                sessionActive = true
+            } catch {
+                // Leave sessionActive false so the next play retries activation.
+                // (It used to latch true via try?, so one failure was permanent.)
+                return
+            }
         }
         if !engine.isRunning {
             engine.prepare()

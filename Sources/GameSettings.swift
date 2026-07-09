@@ -28,20 +28,13 @@ final class GameSettings {
     /// the ball feels responsive out of the box; they can dial it back if it's
     /// too twitchy.
     var sensitivity: Double {
-        get {
-            let v = UserDefaults.standard.double(forKey: Key.sensitivity)
-            return v == 0 ? Self.defaultSensitivity : v   // 0 means "never set"
-        }
+        get { double(forKey: Key.sensitivity, default: Self.defaultSensitivity) }
         set { UserDefaults.standard.set(newValue, forKey: Key.sensitivity) }
     }
 
-    /// Ball restitution: 0.35 (soft, dead) … 0.80 (springy). 0.55 is the default,
-    /// tuned "lively but believable" feel.
+    /// Ball restitution: 0.35 (soft, dead) … 0.80 (springy).
     var bounciness: Double {
-        get {
-            let v = UserDefaults.standard.double(forKey: Key.bounciness)
-            return v == 0 ? Self.defaultBounciness : v   // 0 means "never set"
-        }
+        get { double(forKey: Key.bounciness, default: Self.defaultBounciness) }
         set { UserDefaults.standard.set(newValue, forKey: Key.bounciness) }
     }
 
@@ -52,9 +45,10 @@ final class GameSettings {
         set { UserDefaults.standard.set(newValue, forKey: Key.haptics) }
     }
 
-    /// Sound when the score goes up. Defaults ON.
+    /// Sound when the score goes up. Defaults OFF — the streak blips are easy to
+    /// mistake for noise; players who want them can opt in.
     var scoreSoundEnabled: Bool {
-        get { UserDefaults.standard.object(forKey: Key.scoreSound) as? Bool ?? true }
+        get { UserDefaults.standard.object(forKey: Key.scoreSound) as? Bool ?? false }
         set { UserDefaults.standard.set(newValue, forKey: Key.scoreSound) }
     }
 
@@ -74,11 +68,16 @@ final class GameSettings {
     /// Zen-mode descent speed the player picks, in points/sec. Constant for the
     /// whole run (no ramp). Defaults to a calm value.
     var zenSpeed: Double {
-        get {
-            let v = UserDefaults.standard.double(forKey: Key.zenSpeed)
-            return v == 0 ? Self.defaultZenSpeed : v
-        }
+        get { double(forKey: Key.zenSpeed, default: Self.defaultZenSpeed) }
         set { UserDefaults.standard.set(newValue, forKey: Key.zenSpeed) }
+    }
+
+    /// Double with a real default: `object(forKey:) == nil` distinguishes
+    /// "never set" from any stored value, so 0 (or a default of 0) is safe.
+    /// The old `v == 0 means never set` pattern broke the moment a valid range
+    /// included 0.
+    private func double(forKey key: String, default def: Double) -> Double {
+        UserDefaults.standard.object(forKey: key) as? Double ?? def
     }
 
     // MARK: - Stats (separate ranked vs. zen bests, plus lifetime totals)
@@ -119,7 +118,7 @@ final class GameSettings {
 
     static let minBounciness = 0.35
     static let maxBounciness = 0.80
-    static let defaultBounciness = 0.55
+    static let defaultBounciness = 0.5
 
     static let minZenSpeed = 60.0
     static let maxZenSpeed = 260.0

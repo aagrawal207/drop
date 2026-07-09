@@ -4,7 +4,7 @@ Last updated: July 2026
 
 ## The short version
 
-Drop is a free arcade game. It doesn't collect your data, doesn't show ads, and doesn't track you. Everything it saves — your high score and your settings — stays on your device. The only two things that ever reach outside the app are Apple's Game Center, if you choose to use it, and the "Support Development" link, which opens a web page in Safari.
+Drop is a free arcade game. It doesn't collect your data, doesn't show ads, and doesn't track you. Everything it saves (your high score and your settings) stays on your device. The only two things that ever reach outside the app are Apple's Game Center, if you choose to use it, and the "Support Development" link, which opens a web page in Safari.
 
 The rest of this page fills in the details.
 
@@ -15,7 +15,7 @@ Drop saves a few things locally, using iOS's standard UserDefaults:
 - Your high score.
 - Your settings: steering sensitivity, bounciness, and the haptics and sound toggles.
 
-Nothing else is stored, and none of it leaves your device (except your score, if you opt into Game Center — see below). There's no iCloud sync, so your high score lives only on the device where you set it.
+Nothing else is stored, and none of it leaves your device (except your score, if you opt into Game Center; see below). There's no iCloud sync, so your high score lives only on the device where you set it.
 
 ## Game Center
 

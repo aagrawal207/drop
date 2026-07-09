@@ -22,14 +22,17 @@ Reach a gap in a single clean drop, no wall hits and no extra bounces, and it co
 
 How to play: steer left or right by tilting your phone or tapping and holding either side of the screen. Sensitivity is in Settings if you want it slower.
 
+Prefer a calmer game? Zen mode holds one steady speed that you pick, with its own best score.
+
 Features:
 - Steer by tilt or by touch, whichever you prefer
+- Two modes: ranked play that speeds up, and Zen at a constant speed you choose
 - Adjustable steering sensitivity
-- Speed that ramps up the longer you survive
 - Clean-pass streak bonus for scoring runs
 - Adjustable ball bounciness
+- Ball changes color as your score climbs past 100
 - Haptics that scale with impact speed
-- Soft synthesized score and bounce sounds, each toggleable, no music
+- A wood-knock bounce sound that gets louder the harder you land
 - Optional Game Center leaderboard, plays fine without it
 - Free, no ads, no in-app purchases, no tracking
 
@@ -39,7 +42,7 @@ Made by one person. If you hit a bug or have an idea, open an issue on GitHub.
 `arcade,reflex,ball,tilt,gap,minimalist,reaction,gravity,tap,steer,leaderboard,casual,timing,onehand,falling`  (97 / 100)
 
 ## What's New (v1.0)
-First release. Steer a falling ball through scrolling gaps, chase clean-pass streaks, and post your best to the Game Center leaderboard.
+First release. Steer a falling ball through scrolling gaps, chase clean-pass streaks, and post your best to the Game Center leaderboard. Or pick Zen mode and cruise at your own speed.
 
 ## Category
 - Primary: Games — Arcade

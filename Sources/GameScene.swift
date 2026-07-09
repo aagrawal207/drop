@@ -61,8 +61,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private let cam = SKCameraNode()
     private let ball = SKNode()                  // physics container
-    private let ballSprite = SKSpriteNode()      // rotates to look like rolling
-    private let ballShadow = SKSpriteNode()      // world-aligned, doesn't rotate
+    private let ballSprite = SKSpriteNode()      // glossy sphere (never rotates)
+    private let ballShadow = SKSpriteNode()      // soft blob beneath for grounding
     private var floors: [SKNode] = []
     private var lastGapCenterX: CGFloat = 0
     private var lowestFloorY: CGFloat = 0
@@ -198,8 +198,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func setupBall() {
         // `ball` is an invisible physics container. Its children render the ball:
-        // - ballSprite rotates to fake rolling and takes squash-and-stretch,
-        // - ballShadow is counter-rotated to stay world-aligned beneath it.
+        // - ballSprite draws the glossy sphere (kept unrotated so the baked-in
+        //   specular highlight stays aligned with the light source),
+        // - ballShadow sits beneath it for grounding.
         ball.zPosition = 5
 
         ballShadow.texture = shadowTexture
@@ -217,7 +218,11 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         body.categoryBitMask = Category.ball
         body.collisionBitMask = Category.floor | Category.wall
         body.contactTestBitMask = Category.floor | Category.wall
-        body.allowsRotation = false   // we drive the visual rotation ourselves
+        body.allowsRotation = false   // rotation would spin the baked-in highlight
+        // The ball is the only dynamic body and can free-fall through several
+        // gaps in a row; past ~floorHeight per frame of travel it can tunnel
+        // straight through a static floor without this.
+        body.usesPreciseCollisionDetection = true
         body.friction = 0.3
         // Bounciness is player-tunable; the ball's restitution dominates the
         // collision (it's always above the floor's 0.3), so this drives the feel.
@@ -324,6 +329,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let maxStep = size.width * 0.34
         let low = max(gapWidth / 2 + sideMargin, previous - maxStep)
         let high = min(size.width - gapWidth / 2 - sideMargin, previous + maxStep)
+        // Degenerate scenes (width < gap + margins) invert the range, and
+        // CGFloat.random(in:) traps on an empty range. Center the gap instead.
+        guard low <= high else { return size.width / 2 }
         return CGFloat.random(in: low...high)
     }
 
@@ -799,16 +807,20 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Loop
 
     override func update(_ currentTime: TimeInterval) {
-        var dt = lastUpdate == 0 ? 0 : currentTime - lastUpdate
+        // Raw frame delta for timekeeping; a tighter clamp for camera motion.
+        // Clamping before accumulating `elapsed` made the difficulty ramp and
+        // lifetime playtime undercount whenever frames hitched. The 0.5s cap
+        // only guards against pathological gaps the lastUpdate reset misses.
+        let rawDt = lastUpdate == 0 ? 0 : min(currentTime - lastUpdate, 0.5)
         lastUpdate = currentTime
-        dt = min(dt, 1.0 / 30.0)   // clamp to avoid physics hitches
+        let dt = min(rawDt, 1.0 / 30.0)   // clamp to avoid physics hitches
         guard state == .playing else { return }
 
         // Sample the ball's velocity before the solver runs this frame; didBegin
         // uses it as the true incoming impact speed (see preStepVelocity).
         preStepVelocity = ball.physicsBody?.velocity ?? .zero
 
-        elapsed += dt
+        elapsed += rawDt
         // Ranked ramps up over time; Zen holds the player's chosen speed.
         camSpeed = mode == .zen ? CGFloat(GameSettings.shared.zenSpeed)
                                 : camSpeed(for: elapsed)
@@ -993,11 +1005,15 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         }
 
         guard mask & Category.floor != 0 else { return }
-        // Only thump on a real landing (downward impact), throttled.
         let vy = preStepVelocity.dy
-        if vy < -40, lastUpdate - lastLandHaptic > 0.06 {
+        guard vy < -40 else { return }   // ignore grazes and settling contacts
+        // Count the bounce unconditionally. This used to sit inside the haptic
+        // throttle below, so a second bounce within 60ms was never counted and
+        // a messy pass could still be scored as "clean".
+        bouncesSinceGap += 1
+        // Feedback only, throttled so rapid bounces don't stack haptics/sound.
+        if lastUpdate - lastLandHaptic > 0.06 {
             lastLandHaptic = lastUpdate
-            bouncesSinceGap += 1        // a real bounce before reaching the hole
             HapticsManager.shared.land(velocity: vy)
             SoundManager.shared.bounce(velocity: vy)
         }

@@ -67,7 +67,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Controls")
                 } footer: {
-                    Text("Sensitivity sets how strongly tilt and touch move the ball — lower is calmer, higher is twitchier. Bounciness sets how much the ball springs off floors. Takes effect on your next drop.")
+                    Text("Sensitivity is how strongly tilt and touch steer the ball. Bounciness is how high it springs off floors. Changes apply on your next run.")
                 }
 
                 Section {
@@ -82,7 +82,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Feedback")
                 } footer: {
-                    Text("Haptics buzz on bounces. Score Sound chimes as points rise — more for a streak bonus. Bounce Sound is a soft knock each time the ball lands. Ball Color Changes shifts the ball's color at high scores; turn it off to keep it red.")
+                    Text("Bounce Sound is a wood knock that gets louder the harder the ball lands. Score Sound plays soft blips as points come in. The ball changes color when your score passes 100, 200, 350, and 500; turn that off to keep it red.")
                 }
 
                 Section {
@@ -109,18 +109,18 @@ struct SettingsView: View {
                 } header: {
                     Text("Zen Mode")
                 } footer: {
-                    Text("Zen mode holds this speed for the whole run — no ramp-up. Pick your own pace. Zen keeps its own best score and never affects the Game Center leaderboard.")
+                    Text("Zen holds this speed for the whole run, no speeding up. It keeps its own best score and never touches the Game Center leaderboard.")
                 }
 
                 Section {
-                    scoringRow("Clear a hole", detail: "+1 point")
-                    scoringRow("Clean pass", detail: "Reach a hole in one drop — no wall, no extra bounces")
-                    scoringRow("Streak bonus", detail: "3 clean passes in a row start a bonus: +1, then +2, +3… each next clean pass")
-                    scoringRow("Streak breaks", detail: "Hitting a wall, or bouncing twice before a hole, resets the streak")
+                    scoringRow("Every hole", detail: "+1 point")
+                    scoringRow("Clean pass", detail: "Reach the next hole in one bounce or less")
+                    scoringRow("Streak", detail: "From your 3rd clean pass in a row, each one earns extra: +1, then +2, then +3, and so on")
+                    scoringRow("Streak ends", detail: "Touch a wall or bounce twice on the same floor")
                 } header: {
                     Text("Scoring")
                 } footer: {
-                    Text("Example: 5 clean passes in a row score 1, 1, 2 (+1), 3 (+2), 4 (+3) — 11 points instead of 5. Threading holes cleanly is where the big scores come from.")
+                    Text("So 5 clean passes in a row score 1, 1, 2, 3, 4. That's 11 points instead of 5. Clean play is where big scores come from.")
                 }
 
                 Section {
@@ -132,7 +132,7 @@ struct SettingsView: View {
                 } footer: {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Drop is a free, independent arcade game with no ads and no tracking. Your best score stays on this device.")
-                        Text("Support keeps development going — new features, fixes, and upkeep. It's a voluntary thank-you, not a purchase, and unlocks nothing.")
+                        Text("Support is a voluntary thank-you, not a purchase. It unlocks nothing and keeps development going.")
                     }
                     .padding(.top, 8)
                 }
