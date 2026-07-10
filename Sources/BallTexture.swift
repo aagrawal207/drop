@@ -106,6 +106,8 @@ enum BallTexture {
 /// widely-spaced milestones — a rare, earned reward rather than a constant churn.
 /// Nothing changes before 100. Tier 0 is the classic red; a `nil` tint means
 /// "use glossyRed" so the default ball is byte-for-byte unchanged.
+/// The tail tiers (1 000+) are aspirational: ranked's ramping speed makes them
+/// near-unreachable there, but a patient Zen run at low speed can get to them.
 enum BallPalette {
     static let tiers: [(minScore: Int, tint: UIColor?)] = [
         (0,   nil),                                                   // red (classic)
@@ -113,6 +115,11 @@ enum BallPalette {
         (200, UIColor(red: 0.13, green: 0.72, blue: 0.72, alpha: 1)), // teal
         (350, UIColor(red: 0.26, green: 0.52, blue: 0.96, alpha: 1)), // blue
         (500, UIColor(red: 0.62, green: 0.35, blue: 0.96, alpha: 1)), // violet
+        (1_000,   UIColor(red: 0.96, green: 0.26, blue: 0.62, alpha: 1)), // magenta
+        (5_000,   UIColor(red: 0.16, green: 0.80, blue: 0.40, alpha: 1)), // emerald
+        (10_000,  UIColor(red: 1.00, green: 0.48, blue: 0.08, alpha: 1)), // ember
+        (50_000,  UIColor(red: 0.90, green: 0.92, blue: 0.96, alpha: 1)), // pearl
+        (100_000, UIColor(red: 0.16, green: 0.16, blue: 0.20, alpha: 1)), // obsidian
     ]
 
     /// The highest tier whose threshold the score has reached.

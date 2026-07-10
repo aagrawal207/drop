@@ -82,7 +82,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Feedback")
                 } footer: {
-                    Text("Bounce Sound is a wood knock that gets louder the harder the ball lands. Score Sound plays soft blips as points come in. The ball changes color when your score passes 100, 200, 350, and 500; turn that off to keep it red.")
+                    Text("Bounce Sound is a wood knock that gets louder the harder the ball lands. Score Sound plays soft blips as points come in. The ball changes color at score milestones, starting at 100; keep climbing to find them all, or turn this off to stay red.")
                 }
 
                 Section {
