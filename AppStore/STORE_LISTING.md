@@ -30,7 +30,7 @@ Features:
 - Adjustable steering sensitivity
 - Clean-pass streak bonus for scoring runs
 - Adjustable ball bounciness
-- Ball changes color as your score climbs past 100
+- Ball changes look as your score climbs past 100, from new colors to whole new balls
 - Haptics that scale with impact speed
 - A wood-knock bounce sound that gets louder the harder you land
 - Optional Game Center leaderboard, plays fine without it

@@ -100,26 +100,238 @@ enum BallTexture {
         }
         return SKTexture(image: image)
     }
+
+    // MARK: - Patterned sports balls
+
+    /// The sports balls (basketball, baseball, soccer, bowling) are drawn as a
+    /// flat pattern first, then unified with the tinted tiers by the same trick:
+    /// a shading overlay (lit upper-left, dark rim) plus the specular highlight.
+    /// The ball sprite never rotates (see the physics body), so these are static
+    /// art with the same fixed lighting as the glossy tiers.
+    ///
+    /// All painters use pure CoreGraphics in a y-up space — they are shared
+    /// verbatim with the macOS preview script (AppStore/preview_ball_tiers.swift);
+    /// keep the two in sync.
+
+    static func basketball(radius: CGFloat) -> SKTexture {
+        renderPatterned(radius: radius, paint: paintBasketball)
+    }
+    static func baseball(radius: CGFloat) -> SKTexture {
+        renderPatterned(radius: radius, paint: paintBaseball)
+    }
+    static func soccer(radius: CGFloat) -> SKTexture {
+        renderPatterned(radius: radius, paint: paintSoccer)
+    }
+    static func bowling(radius: CGFloat) -> SKTexture {
+        renderPatterned(radius: radius, paint: paintBowling)
+    }
+
+    /// Flat pattern -> sphere: clip to the circle, paint, then add volume with a
+    /// radial shade (bright at the lit point, dark at the rim) and the same
+    /// specular blob the tinted balls use. The context is flipped to y-up before
+    /// painting so pattern math matches the preview script.
+    private static func renderPatterned(radius: CGFloat,
+                                        paint: (CGContext, CGFloat) -> Void) -> SKTexture {
+        let scale: CGFloat = 3
+        let d = radius * 2
+        let size = CGSize(width: d, height: d)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        format.opaque = false
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { rc in
+            let ctx = rc.cgContext
+            // UIKit contexts are y-down; flip so the painters (and the shading
+            // points below) are in y-up coordinates.
+            ctx.translateBy(x: 0, y: d)
+            ctx.scaleBy(x: 1, y: -1)
+            applySphereEffect(ctx, d: d, paint: paint)
+        }
+        return SKTexture(image: image)
+    }
+
+    /// Shared by the game and (copy-pasted) the preview script. Y-up context.
+    private static func applySphereEffect(_ ctx: CGContext, d: CGFloat,
+                                          paint: (CGContext, CGFloat) -> Void) {
+        let rect = CGRect(x: 0, y: 0, width: d, height: d)
+        ctx.saveGState()
+        ctx.addEllipse(in: rect.insetBy(dx: 1, dy: 1))
+        ctx.clip()
+        paint(ctx, d)
+
+        // Volume: light at the upper-left lit point, falling to a dark rim.
+        let space = CGColorSpaceCreateDeviceRGB()
+        let shade = [
+            CGColor(colorSpace: space, components: [1, 1, 1, 0.20])!,
+            CGColor(colorSpace: space, components: [0, 0, 0, 0.0])!,
+            CGColor(colorSpace: space, components: [0, 0, 0, 0.45])!,
+        ] as CFArray
+        if let grad = CGGradient(colorsSpace: space, colors: shade,
+                                 locations: [0.0, 0.45, 1.0]) {
+            let litPoint = CGPoint(x: d * 0.35, y: d * 0.68)
+            ctx.drawRadialGradient(grad,
+                                   startCenter: litPoint, startRadius: 0,
+                                   endCenter: CGPoint(x: d / 2, y: d / 2),
+                                   endRadius: d * 0.62,
+                                   options: [.drawsAfterEndLocation])
+        }
+        ctx.restoreGState()
+
+        // Specular highlight, top-left — identical to the tinted render.
+        let hlCenter = CGPoint(x: d * 0.34, y: d * 0.72)
+        let hl = [
+            CGColor(colorSpace: space, components: [1, 1, 1, 0.9])!,
+            CGColor(colorSpace: space, components: [1, 1, 1, 0.0])!,
+        ] as CFArray
+        if let grad = CGGradient(colorsSpace: space, colors: hl, locations: [0, 1]) {
+            ctx.drawRadialGradient(grad,
+                                   startCenter: hlCenter, startRadius: 0,
+                                   endCenter: hlCenter, endRadius: d * 0.22,
+                                   options: [])
+        }
+    }
+
+    // MARK: Pattern painters (pure CG, y-up, shared with the preview script)
+
+    /// Regular polygon path helper. `rotation` in radians; 0 puts a vertex at
+    /// the +x axis, angles increase counter-clockwise.
+    private static func addPolygon(_ ctx: CGContext, center: CGPoint, radius: CGFloat,
+                                   sides: Int, rotation: CGFloat) {
+        for i in 0..<sides {
+            let a = rotation + CGFloat(i) * 2 * .pi / CGFloat(sides)
+            let p = CGPoint(x: center.x + radius * cos(a), y: center.y + radius * sin(a))
+            if i == 0 { ctx.move(to: p) } else { ctx.addLine(to: p) }
+        }
+        ctx.closePath()
+    }
+
+    /// Basketball: vivid orange with the classic four seams — vertical,
+    /// horizontal, and one side arc hugging each edge.
+    private static func paintBasketball(_ ctx: CGContext, _ d: CGFloat) {
+        ctx.setFillColor(red: 0.98, green: 0.45, blue: 0.09, alpha: 1)
+        ctx.fill(CGRect(x: 0, y: 0, width: d, height: d))
+        ctx.setStrokeColor(red: 0.13, green: 0.05, blue: 0.03, alpha: 1)
+        ctx.setLineWidth(d * 0.045)
+        // Great circles seen face-on: straight vertical + horizontal seams.
+        ctx.move(to: CGPoint(x: d / 2, y: 0)); ctx.addLine(to: CGPoint(x: d / 2, y: d))
+        ctx.move(to: CGPoint(x: 0, y: d / 2)); ctx.addLine(to: CGPoint(x: d, y: d / 2))
+        ctx.strokePath()
+        // Side seams: big circles centered outside the ball, clipped to arcs.
+        for cx in [-d * 0.28, d * 1.28] {
+            ctx.strokeEllipse(in: CGRect(x: cx - d * 0.55, y: d / 2 - d * 0.55,
+                                         width: d * 1.1, height: d * 1.1))
+        }
+    }
+
+    /// Baseball: cream white with two red stitched seams curving in from the
+    /// sides (the classic "tennis ball curve" layout).
+    private static func paintBaseball(_ ctx: CGContext, _ d: CGFloat) {
+        ctx.setFillColor(red: 0.97, green: 0.96, blue: 0.90, alpha: 1)
+        ctx.fill(CGRect(x: 0, y: 0, width: d, height: d))
+        ctx.setStrokeColor(red: 0.80, green: 0.15, blue: 0.15, alpha: 1)
+
+        // Each seam is an arc of a circle whose center sits outside the ball.
+        let r = d * 0.52
+        let seams: [(cx: CGFloat, inward: Bool)] = [(-d * 0.14, true), (d * 1.14, false)]
+        for seam in seams {
+            let center = CGPoint(x: seam.cx, y: d / 2)
+            ctx.setLineWidth(d * 0.032)
+            ctx.strokeEllipse(in: CGRect(x: center.x - r, y: center.y - r,
+                                         width: r * 2, height: r * 2))
+            // Stitches: short radial ticks crossing the seam, every few degrees
+            // along the portion of the arc that lies inside the ball.
+            ctx.setLineWidth(d * 0.018)
+            let sweep: ClosedRange<CGFloat> = seam.inward ? (-0.62 ... 0.62) : (2.52 ... 3.76)
+            var a = sweep.lowerBound
+            while a <= sweep.upperBound {
+                let dir = CGPoint(x: cos(a), y: sin(a))
+                let p = CGPoint(x: center.x + r * dir.x, y: center.y + r * dir.y)
+                let t = d * 0.045
+                ctx.move(to: CGPoint(x: p.x - dir.x * t, y: p.y - dir.y * t))
+                ctx.addLine(to: CGPoint(x: p.x + dir.x * t, y: p.y + dir.y * t))
+                a += 0.16
+            }
+            ctx.strokePath()
+        }
+    }
+
+    /// Soccer ball: white with a black center pentagon, five rim pentagons at
+    /// the vertices' angles, and thin radial spokes joining them.
+    private static func paintSoccer(_ ctx: CGContext, _ d: CGFloat) {
+        ctx.setFillColor(red: 0.97, green: 0.97, blue: 0.97, alpha: 1)
+        ctx.fill(CGRect(x: 0, y: 0, width: d, height: d))
+        let c = CGPoint(x: d / 2, y: d / 2)
+        let ink: (CGFloat, CGFloat, CGFloat, CGFloat) = (0.10, 0.10, 0.12, 1)
+
+        // Spokes first so the pentagons paint over their ends.
+        ctx.setStrokeColor(red: ink.0, green: ink.1, blue: ink.2, alpha: 0.55)
+        ctx.setLineWidth(d * 0.014)
+        for i in 0..<5 {
+            let a = .pi / 2 + CGFloat(i) * 2 * .pi / 5
+            ctx.move(to: CGPoint(x: c.x + d * 0.17 * cos(a), y: c.y + d * 0.17 * sin(a)))
+            ctx.addLine(to: CGPoint(x: c.x + d * 0.44 * cos(a), y: c.y + d * 0.44 * sin(a)))
+        }
+        ctx.strokePath()
+
+        ctx.setFillColor(red: ink.0, green: ink.1, blue: ink.2, alpha: ink.3)
+        // Center pentagon, point-up.
+        addPolygon(ctx, center: c, radius: d * 0.17, sides: 5, rotation: .pi / 2)
+        ctx.fillPath()
+        // Rim pentagons at each spoke end, points aimed at the center.
+        for i in 0..<5 {
+            let a = .pi / 2 + CGFloat(i) * 2 * .pi / 5
+            let p = CGPoint(x: c.x + d * 0.44 * cos(a), y: c.y + d * 0.44 * sin(a))
+            addPolygon(ctx, center: p, radius: d * 0.15, sides: 5, rotation: a + .pi)
+            ctx.fillPath()
+        }
+    }
+
+    /// Bowling ball: deep glossy night-purple with the two finger holes and a
+    /// thumb hole. The holes get a faint bright lower lip so they read as
+    /// drilled, not painted.
+    private static func paintBowling(_ ctx: CGContext, _ d: CGFloat) {
+        ctx.setFillColor(red: 0.13, green: 0.10, blue: 0.19, alpha: 1)
+        ctx.fill(CGRect(x: 0, y: 0, width: d, height: d))
+        let holes: [(CGFloat, CGFloat)] = [(-0.11, 0.16), (0.07, 0.19), (-0.03, -0.02)]
+        for (hx, hy) in holes {
+            let r = d * 0.075
+            let center = CGPoint(x: d / 2 + hx * d, y: d / 2 + hy * d)
+            ctx.setFillColor(red: 0.02, green: 0.02, blue: 0.04, alpha: 1)
+            ctx.fillEllipse(in: CGRect(x: center.x - r, y: center.y - r,
+                                       width: r * 2, height: r * 2))
+            // Bright lower lip: light catches the inside edge opposite the light.
+            ctx.setStrokeColor(red: 0.45, green: 0.42, blue: 0.55, alpha: 0.55)
+            ctx.setLineWidth(d * 0.010)
+            ctx.addArc(center: center, radius: r - d * 0.006,
+                       startAngle: .pi * 1.15, endAngle: .pi * 1.85, clockwise: false)
+            ctx.strokePath()
+        }
+    }
 }
 
-/// The ball stays the classic red until the score is high, then shifts colour at
+/// The ball stays the classic red until the score is high, then changes look at
 /// widely-spaced milestones — a rare, earned reward rather than a constant churn.
-/// Nothing changes before 100. Tier 0 is the classic red; a `nil` tint means
-/// "use glossyRed" so the default ball is byte-for-byte unchanged.
-/// The tail tiers (1 000+) are aspirational: ranked's ramping speed makes them
-/// near-unreachable there, but a patient Zen run at low speed can get to them.
+/// Nothing changes before 100. Tints alternate with full sports-ball makeovers
+/// so the bigger surprises land on the bigger milestones. The tail tiers are
+/// aspirational: ranked's ramping speed makes them near-unreachable there, but
+/// a patient Zen run at low speed can get to them.
 enum BallPalette {
-    static let tiers: [(minScore: Int, tint: UIColor?)] = [
-        (0,   nil),                                                   // red (classic)
-        (100, UIColor(red: 1.00, green: 0.80, blue: 0.12, alpha: 1)), // gold
-        (200, UIColor(red: 0.13, green: 0.72, blue: 0.72, alpha: 1)), // teal
-        (350, UIColor(red: 0.26, green: 0.52, blue: 0.96, alpha: 1)), // blue
-        (500, UIColor(red: 0.62, green: 0.35, blue: 0.96, alpha: 1)), // violet
-        (1_000,   UIColor(red: 0.96, green: 0.26, blue: 0.62, alpha: 1)), // magenta
-        (5_000,   UIColor(red: 0.16, green: 0.80, blue: 0.40, alpha: 1)), // emerald
-        (10_000,  UIColor(red: 1.00, green: 0.48, blue: 0.08, alpha: 1)), // ember
-        (50_000,  UIColor(red: 0.90, green: 0.92, blue: 0.96, alpha: 1)), // pearl
-        (100_000, UIColor(red: 0.16, green: 0.16, blue: 0.20, alpha: 1)), // obsidian
+    enum Style {
+        case classic                 // the original red, byte-for-byte unchanged
+        case tint(UIColor)           // glossy recolour of the classic ball
+        case basketball, baseball, soccer, bowling
+    }
+
+    static let tiers: [(minScore: Int, style: Style)] = [
+        (0,   .classic),
+        (100, .tint(UIColor(red: 1.00, green: 0.76, blue: 0.03, alpha: 1))), // gold
+        (200, .tint(UIColor(red: 0.00, green: 0.78, blue: 0.92, alpha: 1))), // cyan
+        (350, .basketball),
+        (500, .tint(UIColor(red: 0.58, green: 0.20, blue: 1.00, alpha: 1))), // violet
+        (1_000,  .baseball),
+        (5_000,  .tint(UIColor(red: 0.00, green: 0.84, blue: 0.38, alpha: 1))), // emerald
+        (10_000, .soccer),
+        (50_000, .tint(UIColor(red: 1.00, green: 0.10, blue: 0.55, alpha: 1))), // magenta
+        (100_000, .bowling),
     ]
 
     /// The highest tier whose threshold the score has reached.
@@ -134,9 +346,15 @@ enum BallPalette {
     /// Cached texture for a tier (radius is fixed in practice).
     static func texture(tier: Int, radius: CGFloat) -> SKTexture {
         if let cached = cache[tier] { return cached }
-        let tint = tiers[tier].tint
-        let tex = tint.map { BallTexture.glossy(radius: radius, tint: $0) }
-            ?? BallTexture.glossyRed(radius: radius)
+        let tex: SKTexture
+        switch tiers[tier].style {
+        case .classic:         tex = BallTexture.glossyRed(radius: radius)
+        case .tint(let color): tex = BallTexture.glossy(radius: radius, tint: color)
+        case .basketball:      tex = BallTexture.basketball(radius: radius)
+        case .baseball:        tex = BallTexture.baseball(radius: radius)
+        case .soccer:          tex = BallTexture.soccer(radius: radius)
+        case .bowling:         tex = BallTexture.bowling(radius: radius)
+        }
         cache[tier] = tex
         return tex
     }
