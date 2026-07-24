@@ -383,7 +383,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         // of center ("DR" is wider than "P"); the ball parks there and the run
         // starts from that same spot (see startGame / titleBallOffsetX).
         let titleY = size.height * 0.12
-        let slotHalf = ballRadius + 7
+        // Tight slot: just 2pt of air around the ball, so the letter spacing
+        // reads as DROP, not "DR O P".
+        let slotHalf = ballRadius + 2
         let left = SKLabelNode(fontNamed: "AvenirNext-Heavy")
         left.text = "DR"
         left.fontSize = 50
