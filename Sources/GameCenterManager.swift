@@ -10,35 +10,12 @@ final class GameCenterManager {
     /// Must match the leaderboard ID created in App Store Connect.
     static let leaderboardID = "com.agraabhi.drop.highscore"
 
-    /// Achievements. Each `id` must match an achievement created in App Store
-    /// Connect (Features → Game Center) before it will actually record on device.
-    /// Only ranked (Normal) play triggers these — Zen is self-adjusted difficulty.
-    enum Achievement: String, CaseIterable {
-        case score25    = "com.agraabhi.drop.ach.score25"
-        case score50    = "com.agraabhi.drop.ach.score50"
-        case score100   = "com.agraabhi.drop.ach.score100"
-        case streak5    = "com.agraabhi.drop.ach.streak5"
-        case streak10   = "com.agraabhi.drop.ach.streak10"
-        case cleanTotal100 = "com.agraabhi.drop.ach.clean100"
-
-        var id: String { rawValue }
-    }
-
     private(set) var isAuthenticated = false
 
     /// Best score that couldn't be submitted yet (authentication still resolving
     /// or absent). Flushed the moment authentication lands, so the first game
     /// over after launch isn't silently dropped when auth races the run.
     private var pendingScore = 0
-
-    /// Achievements already reported this install. GameCenter's server ignores
-    /// re-reports, but without this local dedup every scoring event past a
-    /// threshold re-fires the XPC/network call (3 per gap once past 100) — a
-    /// battery/rate-limit problem, not a correctness one. Persisted so it
-    /// survives relaunch.
-    private static let reportedKey = "reportedAchievementIDs"
-    private var reported: Set<String> =
-        Set(UserDefaults.standard.stringArray(forKey: GameCenterManager.reportedKey) ?? [])
 
     /// A sign-in view controller GameKit asked us to show, deferred until the
     /// player opens the leaderboard. We never present it automatically on launch
@@ -97,28 +74,6 @@ final class GameCenterManager {
         }
         GKLeaderboard.submitScore(score, context: 0, player: GKLocalPlayer.local,
                                   leaderboardIDs: [Self.leaderboardID]) { _ in }
-    }
-
-    /// Report an achievement as fully earned (100%). Best-effort — deduped
-    /// locally (see `reported`) so repeat calls from the score loop are free.
-    /// On a network failure the ID is un-marked so a later event retries it.
-    /// No-ops when not signed in (and does NOT mark reported, so it still fires
-    /// once the player eventually signs in).
-    func report(_ achievement: Achievement) {
-        guard isAuthenticated, !reported.contains(achievement.id) else { return }
-        reported.insert(achievement.id)
-        UserDefaults.standard.set(Array(reported), forKey: Self.reportedKey)
-        let a = GKAchievement(identifier: achievement.id)
-        a.percentComplete = 100
-        a.showsCompletionBanner = true
-        GKAchievement.report([a]) { [weak self] error in
-            guard error != nil else { return }
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.reported.remove(achievement.id)
-                UserDefaults.standard.set(Array(self.reported), forKey: Self.reportedKey)
-            }
-        }
     }
 
     /// Present the standard Game Center leaderboard UI, if signed in.

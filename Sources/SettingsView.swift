@@ -109,7 +109,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Zen Mode")
                 } footer: {
-                    Text("Zen holds this speed for the whole run, no speeding up. It keeps its own best score and never touches the Game Center leaderboard.")
+                    Text("Zen starts at this speed and speeds up very, very gently the longer you last, nothing like the regular mode's ramp. It keeps its own best score and never touches the Game Center leaderboard.")
                 }
 
                 Section {

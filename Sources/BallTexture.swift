@@ -125,12 +125,18 @@ enum BallTexture {
     static func bowling(radius: CGFloat) -> SKTexture {
         renderPatterned(radius: radius, paint: paintBowling)
     }
+    static func blackhole(radius: CGFloat) -> SKTexture {
+        // No sphere lighting: a black hole has no surface to catch a specular;
+        // its accretion ring is the only light source.
+        renderPatterned(radius: radius, lighting: false, paint: paintBlackhole)
+    }
 
     /// Flat pattern -> sphere: clip to the circle, paint, then add volume with a
     /// radial shade (bright at the lit point, dark at the rim) and the same
     /// specular blob the tinted balls use. The context is flipped to y-up before
-    /// painting so pattern math matches the preview script.
-    private static func renderPatterned(radius: CGFloat,
+    /// painting so pattern math matches the preview script. `lighting: false`
+    /// skips the shade/specular for self-lit balls (the black hole).
+    private static func renderPatterned(radius: CGFloat, lighting: Bool = true,
                                         paint: (CGContext, CGFloat) -> Void) -> SKTexture {
         let scale: CGFloat = 3
         let d = radius * 2
@@ -144,37 +150,39 @@ enum BallTexture {
             // points below) are in y-up coordinates.
             ctx.translateBy(x: 0, y: d)
             ctx.scaleBy(x: 1, y: -1)
-            applySphereEffect(ctx, d: d, paint: paint)
+            applySphereEffect(ctx, d: d, lighting: lighting, paint: paint)
         }
         return SKTexture(image: image)
     }
 
     /// Shared by the game and (copy-pasted) the preview script. Y-up context.
-    private static func applySphereEffect(_ ctx: CGContext, d: CGFloat,
+    private static func applySphereEffect(_ ctx: CGContext, d: CGFloat, lighting: Bool,
                                           paint: (CGContext, CGFloat) -> Void) {
         let rect = CGRect(x: 0, y: 0, width: d, height: d)
         ctx.saveGState()
         ctx.addEllipse(in: rect.insetBy(dx: 1, dy: 1))
         ctx.clip()
         paint(ctx, d)
-
-        // Volume: light at the upper-left lit point, falling to a dark rim.
         let space = CGColorSpaceCreateDeviceRGB()
-        let shade = [
-            CGColor(colorSpace: space, components: [1, 1, 1, 0.20])!,
-            CGColor(colorSpace: space, components: [0, 0, 0, 0.0])!,
-            CGColor(colorSpace: space, components: [0, 0, 0, 0.45])!,
-        ] as CFArray
-        if let grad = CGGradient(colorsSpace: space, colors: shade,
-                                 locations: [0.0, 0.45, 1.0]) {
-            let litPoint = CGPoint(x: d * 0.35, y: d * 0.68)
-            ctx.drawRadialGradient(grad,
-                                   startCenter: litPoint, startRadius: 0,
-                                   endCenter: CGPoint(x: d / 2, y: d / 2),
-                                   endRadius: d * 0.62,
-                                   options: [.drawsAfterEndLocation])
+        if lighting {
+            // Volume: light at the upper-left lit point, falling to a dark rim.
+            let shade = [
+                CGColor(colorSpace: space, components: [1, 1, 1, 0.20])!,
+                CGColor(colorSpace: space, components: [0, 0, 0, 0.0])!,
+                CGColor(colorSpace: space, components: [0, 0, 0, 0.45])!,
+            ] as CFArray
+            if let grad = CGGradient(colorsSpace: space, colors: shade,
+                                     locations: [0.0, 0.45, 1.0]) {
+                let litPoint = CGPoint(x: d * 0.35, y: d * 0.68)
+                ctx.drawRadialGradient(grad,
+                                       startCenter: litPoint, startRadius: 0,
+                                       endCenter: CGPoint(x: d / 2, y: d / 2),
+                                       endRadius: d * 0.62,
+                                       options: [.drawsAfterEndLocation])
+            }
         }
         ctx.restoreGState()
+        guard lighting else { return }
 
         // Specular highlight, top-left — identical to the tinted render.
         let hlCenter = CGPoint(x: d * 0.34, y: d * 0.72)
@@ -306,6 +314,30 @@ enum BallTexture {
             ctx.strokePath()
         }
     }
+
+    /// Black hole: a pure black event horizon wrapped in a white-hot accretion
+    /// ring that cools through orange to a faint violet halo. Rendered with
+    /// lighting off — the ring is the light source. One radial gradient does
+    /// all of it.
+    private static func paintBlackhole(_ ctx: CGContext, _ d: CGFloat) {
+        let space = CGColorSpaceCreateDeviceRGB()
+        let stops: [(CGFloat, [CGFloat])] = [
+            (0.00, [0.00, 0.00, 0.00, 1]),   // event horizon
+            (0.34, [0.00, 0.00, 0.00, 1]),   // still pitch black
+            (0.42, [1.00, 0.93, 0.80, 1]),   // white-hot inner ring
+            (0.52, [1.00, 0.45, 0.05, 1]),   // orange plasma
+            (0.68, [0.28, 0.06, 0.38, 1]),   // violet falloff
+            (1.00, [0.03, 0.01, 0.07, 1]),   // near-black space
+        ]
+        let colors = stops.map { CGColor(colorSpace: space, components: $0.1)! } as CFArray
+        if let grad = CGGradient(colorsSpace: space, colors: colors,
+                                 locations: stops.map(\.0)) {
+            let c = CGPoint(x: d / 2, y: d / 2)
+            ctx.drawRadialGradient(grad, startCenter: c, startRadius: 0,
+                                   endCenter: c, endRadius: d / 2,
+                                   options: [.drawsAfterEndLocation])
+        }
+    }
 }
 
 /// The ball stays the classic red until the score is high, then changes look at
@@ -318,20 +350,20 @@ enum BallPalette {
     enum Style {
         case classic                 // the original red, byte-for-byte unchanged
         case tint(UIColor)           // glossy recolour of the classic ball
-        case basketball, baseball, soccer, bowling
+        case basketball, baseball, soccer, bowling, blackhole
     }
 
     static let tiers: [(minScore: Int, style: Style)] = [
         (0,   .classic),
-        (100, .tint(UIColor(red: 1.00, green: 0.76, blue: 0.03, alpha: 1))), // gold
-        (200, .tint(UIColor(red: 0.00, green: 0.78, blue: 0.92, alpha: 1))), // cyan
-        (350, .basketball),
-        (500, .tint(UIColor(red: 0.58, green: 0.20, blue: 1.00, alpha: 1))), // violet
-        (1_000,  .baseball),
-        (5_000,  .tint(UIColor(red: 0.00, green: 0.84, blue: 0.38, alpha: 1))), // emerald
-        (10_000, .soccer),
-        (50_000, .tint(UIColor(red: 1.00, green: 0.10, blue: 0.55, alpha: 1))), // magenta
-        (100_000, .bowling),
+        (100, .basketball),
+        (250, .tint(UIColor(red: 1.00, green: 0.76, blue: 0.03, alpha: 1))), // gold
+        (500, .baseball),
+        (750, .tint(UIColor(red: 0.58, green: 0.20, blue: 1.00, alpha: 1))), // violet
+        (1_000,  .soccer),
+        (2_500,  .tint(UIColor(red: 0.00, green: 0.84, blue: 0.38, alpha: 1))), // emerald
+        (5_000,  .bowling),
+        (7_500,  .tint(UIColor(red: 1.00, green: 0.10, blue: 0.55, alpha: 1))), // magenta
+        (10_000, .blackhole),
     ]
 
     /// The highest tier whose threshold the score has reached.
@@ -354,6 +386,7 @@ enum BallPalette {
         case .baseball:        tex = BallTexture.baseball(radius: radius)
         case .soccer:          tex = BallTexture.soccer(radius: radius)
         case .bowling:         tex = BallTexture.bowling(radius: radius)
+        case .blackhole:       tex = BallTexture.blackhole(radius: radius)
         }
         cache[tier] = tex
         return tex

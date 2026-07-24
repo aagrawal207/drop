@@ -26,7 +26,7 @@ struct ScoresView: View {
                 } header: {
                     Text("Best Scores")
                 } footer: {
-                    Text("Ranked is the classic speed-up mode and the only one that counts on the global leaderboard. Zen holds a speed you choose. Times show how long that best run lasted.")
+                    Text("Ranked is the classic speed-up mode and the only one that counts on the global leaderboard. Zen starts at a speed you choose and climbs only very gently. Times show how long that best run lasted.")
                 }
 
                 Section {

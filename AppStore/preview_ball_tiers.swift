@@ -104,15 +104,35 @@ func paintBowling(_ ctx: CGContext, _ d: CGFloat) {
     }
 }
 
+func paintBlackhole(_ ctx: CGContext, _ d: CGFloat) {
+    let space = CGColorSpaceCreateDeviceRGB()
+    let stops: [(CGFloat, [CGFloat])] = [
+        (0.00, [0.00, 0.00, 0.00, 1]),
+        (0.34, [0.00, 0.00, 0.00, 1]),
+        (0.42, [1.00, 0.93, 0.80, 1]),
+        (0.52, [1.00, 0.45, 0.05, 1]),
+        (0.68, [0.28, 0.06, 0.38, 1]),
+        (1.00, [0.03, 0.01, 0.07, 1]),
+    ]
+    let colors = stops.map { CGColor(colorSpace: space, components: $0.1)! } as CFArray
+    if let grad = CGGradient(colorsSpace: space, colors: colors, locations: stops.map(\.0)) {
+        let c = CGPoint(x: d / 2, y: d / 2)
+        ctx.drawRadialGradient(grad, startCenter: c, startRadius: 0,
+                               endCenter: c, endRadius: d / 2,
+                               options: [.drawsAfterEndLocation])
+    }
+}
+
 // MARK: - Sphere effect (verbatim, y-up)
 
-func applySphereEffect(_ ctx: CGContext, d: CGFloat, paint: (CGContext, CGFloat) -> Void) {
+func applySphereEffect(_ ctx: CGContext, d: CGFloat, lighting: Bool = true, paint: (CGContext, CGFloat) -> Void) {
     let rect = CGRect(x: 0, y: 0, width: d, height: d)
     ctx.saveGState()
     ctx.addEllipse(in: rect.insetBy(dx: 1, dy: 1))
     ctx.clip()
     paint(ctx, d)
     let space = CGColorSpaceCreateDeviceRGB()
+    if !lighting { ctx.restoreGState(); return }
     let shade = [
         CGColor(colorSpace: space, components: [1, 1, 1, 0.20])!,
         CGColor(colorSpace: space, components: [0, 0, 0, 0.0])!,
@@ -173,18 +193,18 @@ func tinted(_ t: Tint) -> (NSColor, NSColor, NSColor) {
 
 // MARK: - Compose the strip
 
-enum Style { case classic, tint(Tint), basketball, baseball, soccer, bowling }
+enum Style { case classic, tint(Tint), basketball, baseball, soccer, bowling, blackhole }
 let tiers: [(String, Style)] = [
-    ("0 red",        .classic),
-    ("100 gold",     .tint(Tint(r: 1.00, g: 0.76, b: 0.03))),
-    ("200 cyan",     .tint(Tint(r: 0.00, g: 0.78, b: 0.92))),
-    ("350 bball",    .basketball),
-    ("500 violet",   .tint(Tint(r: 0.58, g: 0.20, b: 1.00))),
-    ("1k baseball",  .baseball),
-    ("5k emerald",   .tint(Tint(r: 0.00, g: 0.84, b: 0.38))),
-    ("10k soccer",   .soccer),
-    ("50k magenta",  .tint(Tint(r: 1.00, g: 0.10, b: 0.55))),
-    ("100k bowling", .bowling),
+    ("0 red",         .classic),
+    ("100 bball",     .basketball),
+    ("250 gold",      .tint(Tint(r: 1.00, g: 0.76, b: 0.03))),
+    ("500 baseball",  .baseball),
+    ("750 violet",    .tint(Tint(r: 0.58, g: 0.20, b: 1.00))),
+    ("1k soccer",     .soccer),
+    ("2.5k emerald",  .tint(Tint(r: 0.00, g: 0.84, b: 0.38))),
+    ("5k bowling",    .bowling),
+    ("7.5k magenta",  .tint(Tint(r: 1.00, g: 0.10, b: 0.55))),
+    ("10k blackhole", .blackhole),
 ]
 
 let classicRed = (NSColor(red: 1.00, green: 0.42, blue: 0.38, alpha: 1),
@@ -203,6 +223,7 @@ func drawBall(_ ctx: CGContext, style: Style, at origin: CGPoint, d: CGFloat) {
     case .baseball:   applySphereEffect(ctx, d: d, paint: paintBaseball)
     case .soccer:     applySphereEffect(ctx, d: d, paint: paintSoccer)
     case .bowling:    applySphereEffect(ctx, d: d, paint: paintBowling)
+    case .blackhole:  applySphereEffect(ctx, d: d, lighting: false, paint: paintBlackhole)
     }
     ctx.restoreGState()
 }

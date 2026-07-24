@@ -160,4 +160,18 @@ final class ScreenshotBot: XCTestCase {
         sleep(2)
         save("04-settings")
     }
+
+    /// Captures the menu -> play transition frames, to verify the run starts
+    /// with the title's own ball (the O of DROP) dropping in place.
+    func testCaptureStartTransition() throws {
+        let app = XCUIApplication()
+        app.launch()
+        sleep(2)
+        save("t0-menu")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.49)).tap()
+        for i in 1...5 {
+            save(String(format: "t%d-start", i))
+            usleep(150_000)
+        }
+    }
 }

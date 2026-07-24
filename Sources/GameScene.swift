@@ -9,8 +9,8 @@ private enum GameState {
 }
 
 private enum GameMode {
-    case ranked   // Normal: ramping speed, feeds Game Center + achievements.
-    case zen      // Relaxed: constant player-chosen speed, own local best.
+    case ranked   // Normal: ramping speed, feeds the Game Center leaderboard.
+    case zen      // Relaxed: player-chosen speed with a glacial ramp, own local best.
 }
 
 private struct Category {
@@ -68,6 +68,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var lowestFloorY: CGFloat = 0
     private var camSpeed: CGFloat = 120
     private var scriptedCamY: CGFloat = 0
+    /// X of the title's O-slot (where the menu ball sits), relative to screen
+    /// center. Runs start the ball here so it drops straight out of the word.
+    private var titleBallOffsetX: CGFloat = 0
     private var elapsed: TimeInterval = 0
     /// Seconds of this run already flushed into totalTimePlayed. Banking happens
     /// at pause and at game over (delta-based, so it never double-counts).
@@ -290,6 +293,16 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         return baseCamSpeed + range * CGFloat(progress)
     }
 
+    /// Zen's ramp: same curve shape, glacial pace. It drifts from the player's
+    /// chosen speed toward 1.5x of it with a 7-minute time constant — after a
+    /// minute it's barely 13% of the way there. Zen stays relaxing, it just no
+    /// longer feels frozen on very long runs.
+    private func zenCamSpeed(for t: TimeInterval) -> CGFloat {
+        let base = CGFloat(GameSettings.shared.zenSpeed)
+        let progress = 1 - exp(-t / 420)
+        return base + base * 0.5 * CGFloat(progress)
+    }
+
     // MARK: - Floor generation
 
     private func makeFloor(atY y: CGFloat, gapCenterX: CGFloat) -> SKNode {
@@ -355,17 +368,43 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         scoreLabel.isHidden = true
         modeBadge.isHidden = true
         ball.physicsBody?.isDynamic = false
-        ball.position = CGPoint(x: size.width / 2, y: cam.position.y + size.height * 0.12)
+        // The ball IS the "O" of DROP — parked in the title's letter gap below,
+        // once the O-slot position is computed. startGame keeps this screen
+        // position, so the run visibly begins with the title's own ball
+        // dropping out of the word.
 
         let node = SKNode()
         node.zPosition = 20
 
-        let title = SKLabelNode(fontNamed: "AvenirNext-Heavy")
-        title.text = "DROP"
-        title.fontSize = 64
-        title.fontColor = .white
-        title.position = CGPoint(x: 0, y: size.height * 0.12)
-        node.addChild(title)
+        // "DR ● P" — two labels leave a ball-sized hole where the O belongs.
+        // 50pt Avenir Next Heavy has a cap height of ~35pt, a close match for
+        // the 34pt ball, so the ball genuinely reads as the missing letter.
+        // The WORD is centered on screen, which puts the O slot slightly right
+        // of center ("DR" is wider than "P"); the ball parks there and the run
+        // starts from that same spot (see startGame / titleBallOffsetX).
+        let titleY = size.height * 0.12
+        let slotHalf = ballRadius + 7
+        let left = SKLabelNode(fontNamed: "AvenirNext-Heavy")
+        left.text = "DR"
+        left.fontSize = 50
+        left.fontColor = .white
+        left.horizontalAlignmentMode = .right
+        left.verticalAlignmentMode = .center
+        let right = SKLabelNode(fontNamed: "AvenirNext-Heavy")
+        right.text = "P"
+        right.fontSize = 50
+        right.fontColor = .white
+        right.horizontalAlignmentMode = .left
+        right.verticalAlignmentMode = .center
+        // Word width = DR + ball slot + P; O-slot center relative to word center.
+        let wordWidth = left.frame.width + slotHalf * 2 + right.frame.width
+        titleBallOffsetX = -wordWidth / 2 + left.frame.width + slotHalf
+        left.position = CGPoint(x: titleBallOffsetX - slotHalf, y: titleY)
+        right.position = CGPoint(x: titleBallOffsetX + slotHalf, y: titleY)
+        node.addChild(left)
+        node.addChild(right)
+        ball.position = CGPoint(x: size.width / 2 + titleBallOffsetX,
+                                y: cam.position.y + titleY)
 
         // Explicit mode buttons. The old menu started a ranked run on ANY tap
         // (with zen as a bare text line) — easy to mis-tap into a scored run,
@@ -534,18 +573,23 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         addPauseButton()
 
         // Reset the camera and lay down a starting floor beneath the ball.
+        // The ball begins exactly where the menu title's O sits (slightly right
+        // of center; the camera reset keeps the screen position identical), so
+        // play starts with that exact ball simply beginning to fall. The first
+        // gap is centered under it.
+        let startX = size.width / 2 + titleBallOffsetX
         cam.position = CGPoint(x: size.width / 2, y: 0)
         scriptedCamY = 0
-        lastGapCenterX = size.width / 2
+        lastGapCenterX = startX
         lowestFloorY = 0
 
         let firstY = -size.height * 0.10
-        let first = makeFloor(atY: firstY, gapCenterX: size.width / 2)
+        let first = makeFloor(atY: firstY, gapCenterX: startX)
         addChild(first)
         floors.append(first)
         lowestFloorY = firstY
 
-        ball.position = CGPoint(x: size.width / 2, y: size.height * 0.18)
+        ball.position = CGPoint(x: startX, y: size.height * 0.12)
         ball.physicsBody?.velocity = .zero
         ball.physicsBody?.restitution = CGFloat(GameSettings.shared.bounciness)
         ball.physicsBody?.isDynamic = true
@@ -821,8 +865,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         preStepVelocity = ball.physicsBody?.velocity ?? .zero
 
         elapsed += rawDt
-        // Ranked ramps up over time; Zen holds the player's chosen speed.
-        camSpeed = mode == .zen ? CGFloat(GameSettings.shared.zenSpeed)
+        // Ranked ramps up fast; Zen ramps too, but glacially (see zenCamSpeed).
+        camSpeed = mode == .zen ? zenCamSpeed(for: elapsed)
                                 : camSpeed(for: elapsed)
 
         // The camera descends at a steady, ever-increasing rate so the floors
@@ -889,8 +933,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             cleanStreak += 1
             bestStreakThisRun = max(bestStreakThisRun, cleanStreak)
             if mode == .ranked {
-                GameSettings.shared.totalCleanPasses += 1
-                reportCleanPassAchievements()
+                GameSettings.shared.totalCleanPasses += 1   // lifetime stat (Scores sheet)
             }
             if cleanStreak >= streakBonusThreshold {
                 let bonus = cleanStreak - (streakBonusThreshold - 1)   // 1, 2, 3, …
@@ -904,7 +947,6 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         scoreLabel.text = "\(score)"
         bouncesSinceGap = 0                         // reset for the next hole
         updateBallTier()                            // colour warms/cools with score
-        if mode == .ranked { reportScoreAchievements() }
 
         // Combo readout, shown once the escalating bonus is live.
         if cleanStreak >= streakBonusThreshold {
@@ -962,22 +1004,6 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             ballSprite.removeAllActions()
             ballSprite.setScale(1.28)
             ballSprite.run(.scale(to: 1.0, duration: 0.18))
-        }
-    }
-
-    // MARK: - Achievements (ranked mode only)
-
-    private func reportScoreAchievements() {
-        if score >= 25  { GameCenterManager.shared.report(.score25) }
-        if score >= 50  { GameCenterManager.shared.report(.score50) }
-        if score >= 100 { GameCenterManager.shared.report(.score100) }
-    }
-
-    private func reportCleanPassAchievements() {
-        if cleanStreak >= 5  { GameCenterManager.shared.report(.streak5) }
-        if cleanStreak >= 10 { GameCenterManager.shared.report(.streak10) }
-        if GameSettings.shared.totalCleanPasses >= 100 {
-            GameCenterManager.shared.report(.cleanTotal100)
         }
     }
 

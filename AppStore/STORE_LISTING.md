@@ -42,7 +42,7 @@ Made by one person. If you hit a bug or have an idea, open an issue on GitHub.
 `arcade,reflex,ball,tilt,gap,minimalist,reaction,gravity,tap,steer,leaderboard,casual,timing,onehand,falling`  (97 / 100)
 
 ## What's New (v1.0)
-First release. Steer a falling ball through scrolling gaps, chase clean-pass streaks, and post your best to the Game Center leaderboard. Or pick Zen mode and cruise at your own speed.
+The ball is now the O in DROP, and your run starts right from the title. Score milestones transform the ball: basketball at 100, baseball at 500, soccer ball at 1000, bowling ball at 5000, and something that bends light at 10000. Zen mode now speeds up too, just very, very slowly.
 
 ## Category
 - Primary: Games — Arcade
