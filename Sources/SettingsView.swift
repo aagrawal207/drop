@@ -138,6 +138,17 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Link(destination: URL(string: "https://apps.apple.com/app/bruce-workout-tracker/id6770409619")!) {
+                        appRow("Bruce", subtitle: "Workout tracker", image: "BruceIcon")
+                    }
+                    Link(destination: URL(string: "https://apps.apple.com/app/osho-talks-audio-discourses/id6774409039")!) {
+                        appRow("Osho Talks", subtitle: "Audio discourses", image: "OshoIcon")
+                    }
+                } header: {
+                    Text("More From the Developer")
+                }
+
+                Section {
                     LabeledContent("Version", value: version)
                     LabeledContent("Controls", value: "Tilt & Touch")
                 }
@@ -169,5 +180,29 @@ struct SettingsView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    /// A row for another app: bundled icon, name + one-liner, App Store arrow.
+    /// The icons are the only bundled images in the project (everything else is
+    /// drawn at runtime) — other apps' icons can't be synthesized.
+    private func appRow(_ title: String, subtitle: String, image: String) -> some View {
+        HStack(spacing: 12) {
+            Image(image)
+                .resizable()
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "arrow.up.right")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 2)
     }
 }

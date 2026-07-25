@@ -159,6 +159,11 @@ final class ScreenshotBot: XCTestCase {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.078)).tap()
         sleep(2)
         save("04-settings")
+        // Bottom of the sheet too (scoring / about / more-apps sections).
+        app.swipeUp()
+        app.swipeUp()
+        sleep(1)
+        save("04b-settings-bottom")
     }
 
     /// Captures the menu -> play transition frames, to verify the run starts
