@@ -145,7 +145,7 @@ struct SettingsView: View {
                         appRow("Osho Talks", subtitle: "Audio discourses", image: "OshoIcon")
                     }
                 } header: {
-                    Text("More From the Developer")
+                    Text("More From Me")
                 }
 
                 Section {
