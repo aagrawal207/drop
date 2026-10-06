@@ -1,85 +1,58 @@
-# Drop — App Store Listing (v1.0)
+# Drop: App Store Listing (v1.2)
 
-Copy-paste reference for the App Store Connect listing fields. Character counts noted where limits apply.
+Mirrors what is in App Store Connect. The source of truth for `asc metadata push` is
+`AppStore/metadata/` (app-info and version JSON); keep this file in sync with it.
 
-## App Name
-`Drop`  (4 / 30)
+## App Name  (max 30)
+`Drop: Falling Ball Tilt Game`  (28 / 30). The on-device name stays `Drop`.
 
 ## Subtitle  (max 30)
-**Minimalist reflex arcade game**  (29 / 30)
+`Endless reflex arcade, no ads`  (29 / 30)
 
-Alternates, if you prefer:
-- `Thread the ball through gaps`  (28 / 30)
-- `Fall, steer, keep the streak`  (28 / 30)
+## Keywords  (max 100, comma-separated, no spaces)
+`offline,bounce,gravity,gap,hole,dodge,zen,relax,skill,reaction,casual,steer,motion,highscore,simple`  (99 / 100)
+
+Words already in the name or subtitle (drop, falling, ball, tilt, game, endless,
+reflex, arcade, ads) are indexed from there, so they are not repeated here.
 
 ## Promotional Text  (max 170)
-A glossy red ball, floors scrolling up, one gap in each. Tilt or tap to steer through. It starts gentle, then speeds up. Free, no ads.  (133 / 170)
+Tilt your phone to steer a falling ball through the gaps. Chain clean drops for streak bonuses and climb the leaderboard. Free, offline, no ads.  (144 / 170)
 
 ## Description
-Drop is a simple reflex game. A red ball falls, wooden floors scroll up past it, and each floor has one gap. Your job is to steer the ball into the gap before the floor pushes it to the top of the screen. It starts slow and gets faster the longer you last.
+Drop is a simple, endless reflex game. A red ball falls, wooden floors scroll up past it, and each floor has one gap. Tilt your phone to steer the ball into the gap before the floor pushes it off the top of the screen. It starts slow and gets faster the longer you last.
 
-Reach a gap in a single clean drop, no wall hits and no extra bounces, and it counts as a clean pass. String three clean passes together and a streak bonus kicks in, adding more points on every clean pass after that. Hit a wall or bounce twice and the streak resets. Your best score is saved on your device.
+Reach a gap in a single clean drop, with no wall hits and no extra bounces, and it counts as a clean pass. String three clean passes together and a streak bonus kicks in, adding more points on every clean pass after that. Hit a wall or bounce twice and the streak resets.
 
-How to play: steer left or right by tilting your phone or tapping and holding either side of the screen. Sensitivity is in Settings if you want it slower.
+New to it? A quick tutorial shows you how to tilt before your first run. Sensitivity is in Settings if the ball feels too quick.
 
-Prefer a calmer game? Zen mode holds one steady speed that you pick, with its own best score.
+Prefer something calmer? Zen mode starts at a speed you pick and only speeds up very gently, with its own best score.
 
 Features:
-- Steer by tilt or by touch, whichever you prefer
-- Two modes: ranked play that speeds up, and Zen at a constant speed you choose
-- Adjustable steering sensitivity
-- Clean-pass streak bonus for scoring runs
-- Adjustable ball bounciness
-- Ball changes look as your score climbs past 100, from new colors to whole new balls
-- Haptics that scale with impact speed
-- A wood-knock bounce sound that gets louder the harder you land
-- Optional Game Center leaderboard, plays fine without it
+- Tilt to steer, one-handed and simple
+- Two modes: ranked play that speeds up, and relaxing Zen mode
+- Clean-pass streak bonus for big scores
+- The ball transforms as you climb: basketball at 100, baseball at 500, soccer ball at 1000 and more
+- Game Center leaderboard, optional, plays fine without signing in
+- Haptics and a wood-knock bounce sound that follow how hard you land
+- Adjustable sensitivity and bounciness
+- Works offline
 - Free, no ads, no in-app purchases, no tracking
 
 Made by one person. If you hit a bug or have an idea, open an issue on GitHub.
 
-## Keywords  (max 100, comma-separated, no spaces)
-`arcade,reflex,ball,tilt,gap,minimalist,reaction,gravity,tap,steer,leaderboard,casual,timing,onehand,falling`  (97 / 100)
+## What's New (v1.2)
+- Tilt is now the way to steer. Touch steering is gone, so taps never fight your tilt mid-run.
+- A quick tutorial shows how to play before your first run. Replay it any time from Settings.
+- Game over screen is easier to read.
 
-## What's New (v1.0)
-The ball is now the O in DROP, and your run starts right from the title. Score milestones transform the ball: basketball at 100, baseball at 500, soccer ball at 1000, bowling ball at 5000, and something that bends light at 10000. Zen mode now speeds up too, just very, very slowly.
-
-## Category
-- Primary: Games — Arcade
-- Secondary: Games — Action
-
-## Age Rating
-4+ (no objectionable content)
-
-## URLs
-- Support URL: `https://github.com/aagrawal207/drop/issues`
-- Privacy Policy URL: `https://github.com/aagrawal207/drop/blob/<branch>/PRIVACY.md`
-- Marketing URL: (optional — leave blank)
-
-> ACTION BEFORE SUBMIT: The Drop repo is not published yet and PRIVACY.md is not hosted. Both URLs above must resolve (HTTP 200) before you submit, or App Review rejects on a broken privacy-policy / support link. If you host the policy elsewhere (gist, personal site), update both fields to match. Confirm the repo's default branch name (`mainline` vs `main`) in the blob URL.
-
-## Copyright
-`2026 Abhishek Agrawal`
-
-## App Privacy (Data Collection)
-- Select **Data Not Collected** — with one nuance below for Game Center.
-- The app stores only your high score and settings locally in UserDefaults; nothing is sent to the developer or any third party.
-- No analytics, no crash reporting, no advertising SDKs, no third-party SDKs — Apple frameworks only.
-- Game Center: if you want to be strict, declare **Identifiers → User ID** (the Game Center player ID, only when signed in), **not linked to identity**, **not used for tracking**, purpose **App Functionality**. See the submission guide for the exact buckets.
-
-## Tracking / IDFA
-- App Tracking Transparency: not used (no tracking, no IDFA access).
-- IDFA answer in App Store Connect: **No.**
-
-## Export Compliance
-- `ITSAppUsesNonExemptEncryption = NO` is already set in the build, so uploads skip the encryption questionnaire. Uses only standard HTTPS / OS crypto — qualifies for exemption. Nothing to file.
+## Screenshots (6.9", `APP_IPHONE_67` set)
+`AppStore/screenshots/01-streak.png` … `05-settings.png`, 1320 × 2868, captured from the
+1.2 build on the iPhone 18 Pro Max simulator with `UITests/ScreenshotBot.swift`.
 
 ## Game Center
-- One global leaderboard, ID `com.agraabhi.drop.highscore` (Classic, all-time, global scope).
-- Fully playable signed out; the trophy button then shows only the local best. Game Center handles player identity; that is the only identity data involved and it is managed by iOS, not stored by the app.
+Leaderboard `com.agraabhi.drop.highscore`, shown as "High Score" (en-US, no suffix).
+Its first version ships in the same review submission as app version 1.2.
 
-## Fixed-config reference
-- Bundle ID: `com.agraabhi.drop`
-- Deployment target: iOS 17.0+
-- Orientation: Portrait only
-- Price: Free — no ads, no in-app purchases
+## URLs
+- Support: https://github.com/aagrawal207/drop/issues
+- Privacy: https://github.com/aagrawal207/drop/blob/main/PRIVACY.md
