@@ -36,7 +36,7 @@ Features:
 - Haptics and a wood-knock bounce sound that follow how hard you land
 - Adjustable sensitivity and bounciness
 - Works offline
-- Free, no ads, no in-app purchases, no tracking
+- Free, no ads, no tracking. Optional tips in Settings unlock nothing
 
 Made by one person. If you hit a bug or have an idea, open an issue on GitHub.
 
@@ -52,6 +52,19 @@ Made by one person. If you hit a bug or have an idea, open an issue on GitHub.
 ## Game Center
 Leaderboard `com.agraabhi.drop.highscore`, shown as "High Score" (en-US, no suffix).
 Its first version ships in the same review submission as app version 1.2.
+
+## Tips (in-app purchases)
+Five consumables, `com.agraabhi.drop.tip.` + suffix, mirroring Howzat. They unlock nothing.
+
+| Suffix | App Store ID | USD |
+|---|---|---:|
+| `small` | 6819756587 | $3 |
+| `medium` | 6819756662 | $5 |
+| `large` | 6819756726 | $10 |
+| `grand` | 6819756699 | $25 |
+| `patron` | 6819756778 | $50 |
+
+Review screenshot for all five: `AppStore/iap-review/tipjar.png` (from `UITests/TipJarFlow.swift`).
 
 ## URLs
 - Support: https://github.com/aagrawal207/drop/issues

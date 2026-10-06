@@ -34,7 +34,7 @@ You steer the ball by tilting your device. Drop reads the accelerometer to move 
 Drop itself makes no network calls. The only network activity involves:
 
 - Game Center, when you use the leaderboard. That traffic is handled by iOS, not by Drop.
-- The "Support Development" link, which opens `buymeacoffee.com` in Safari. Drop sends nothing to that site; it just hands the link to your browser. Anything that happens after that is between you and Buy Me a Coffee.
+- Optional tips in "Support Development", which are in-app purchases handled entirely by Apple through the App Store. Drop never sees your payment details or Apple Account. It only keeps a count of tips on your device to say thank you.
 
 ## Analytics and tracking
 

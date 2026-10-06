@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var bounceSoundEnabled = GameSettings.shared.bounceSoundEnabled
     @State private var ballColorEnabled = GameSettings.shared.ballColorEnabled
     @State private var tutorialQueued = !GameSettings.shared.hasSeenTutorial
+    @State private var showTipJar = false
 
     private var version: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -125,15 +126,25 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Link(destination: URL(string: "https://buymeacoffee.com/aagrawal207")!) {
-                        linkRow("Support Development", icon: "cup.and.saucer.fill", tint: .pink)
+                    Button {
+                        showTipJar = true
+                    } label: {
+                        HStack {
+                            Label("Support Development", systemImage: "cup.and.saucer.fill")
+                                .foregroundStyle(.pink)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
                     }
+                    .accessibilityIdentifier("settings.tipJar")
                 } header: {
                     Text("About")
                 } footer: {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Drop is a free, independent arcade game with no ads and no tracking. Your best score stays on this device.")
-                        Text("Support is a voluntary thank-you, not a purchase. It unlocks nothing and keeps development going.")
+                        Text("Tips are optional one-time purchases through Apple. They unlock nothing and keep development going.")
                     }
                     .padding(.top, 8)
                 }
@@ -158,6 +169,7 @@ struct SettingsView: View {
                     .disabled(tutorialQueued)
                 }
             }
+            .sheet(isPresented: $showTipJar) { TipJarView() }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -174,17 +186,6 @@ struct SettingsView: View {
             Text(detail).font(.footnote).foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
-    }
-
-    private func linkRow(_ title: String, icon: String, tint: Color) -> some View {
-        HStack {
-            Label(title, systemImage: icon)
-                .foregroundStyle(tint)
-            Spacer()
-            Image(systemName: "arrow.up.right")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
     }
 
     /// A row for another app: bundled icon, name + one-liner, App Store arrow.

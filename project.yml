@@ -6,7 +6,7 @@ options:
 settings:
   base:
     MARKETING_VERSION: "1.2"
-    CURRENT_PROJECT_VERSION: "3"
+    CURRENT_PROJECT_VERSION: "4"
     GENERATE_INFOPLIST_FILE: YES
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     INFOPLIST_KEY_CFBundleDisplayName: Drop
@@ -52,6 +52,9 @@ targets:
     platform: iOS
     sources:
       - UITests
+      # StoreKitTest sessions load the catalog from the UI-test bundle.
+      - path: TipJar.storekit
+        buildPhase: resources
     dependencies:
       - target: FallingBall
 schemes:
@@ -61,8 +64,12 @@ schemes:
         FallingBall: all
     run:
       config: Debug
+      # Local StoreKit products so the tip jar works in a simulator without App Store
+      # Connect; TestFlight and the App Store use the real products with the same IDs.
+      storeKitConfiguration: TipJar.storekit
     test:
       config: Debug
+      storeKitConfiguration: TipJar.storekit
       targets:
         - FallingBallUITests
     archive:

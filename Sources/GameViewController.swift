@@ -24,6 +24,8 @@ class GameViewController: UIViewController {
         self.scene = scene
 
         GameCenterManager.shared.authenticate()
+        // Approvals and interrupted tips arrive on the App Store's schedule, not while the sheet is open.
+        TipJarService.shared.observeTransactions()
 
         // Auto-pause only on real backgrounding (home, app switch, lock), NOT on
         // willResignActive — that also fires for transient overlays (Control

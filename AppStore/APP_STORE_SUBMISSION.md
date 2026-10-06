@@ -44,7 +44,7 @@ Both are already in `project.yml`. If you regenerate the project with xcodegen, 
 - **Content Rights:** you own all content; no third-party content
 - **Age Rating:** work through the questionnaire honestly — no violence, no mature themes — lands at **4+**
 - **Privacy Policy URL:** the public URL where you hosted `PRIVACY.md`. Required even for a game that collects almost nothing.
-- **Price:** Free (Tier 0). No in-app purchases.
+- **Price:** Free (Tier 0). Optional tip jar: five consumable in-app purchases that unlock nothing (see STORE_LISTING.md). Tips must go through In-App Purchase; an external donation link (Buy Me a Coffee) was rejected for 1.2.
 
 ## App Privacy (data collection answers)
 

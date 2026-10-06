@@ -1,0 +1,138 @@
+{
+  "identifier": "44524F50-5449-5000-8000-000000000001",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "3.00",
+      "familyShareable": false,
+      "internalID": "44524F00",
+      "localizations": [
+        {
+          "description": "A coffee for the developer.",
+          "displayName": "Small tip",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agraabhi.drop.tip.small",
+      "referenceName": "Small tip",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "5.00",
+      "familyShareable": false,
+      "internalID": "44524F01",
+      "localizations": [
+        {
+          "description": "Covers a month of the odd fix.",
+          "displayName": "Generous tip",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agraabhi.drop.tip.medium",
+      "referenceName": "Generous tip",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "10.00",
+      "familyShareable": false,
+      "internalID": "44524F02",
+      "localizations": [
+        {
+          "description": "Funds an afternoon on a new feature.",
+          "displayName": "Big tip",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agraabhi.drop.tip.large",
+      "referenceName": "Big tip",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "25.00",
+      "familyShareable": false,
+      "internalID": "44524F03",
+      "localizations": [
+        {
+          "description": "You are keeping Drop alive.",
+          "displayName": "Grand tip",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agraabhi.drop.tip.grand",
+      "referenceName": "Grand tip",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "50.00",
+      "familyShareable": false,
+      "internalID": "44524F04",
+      "localizations": [
+        {
+          "description": "Helps fund more improvements to the game.",
+          "displayName": "Patron tip",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agraabhi.drop.tip.patron",
+      "referenceName": "Patron tip",
+      "type": "Consumable"
+    }
+  ],
+  "settings": {
+    "_failTransactionsEnabled": false,
+    "_locale": "en_US",
+    "_storefront": "USA",
+    "_storeKitErrors": [
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Load Products"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Purchase"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Verification"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "App Store Sync"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Subscription Status"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "App Transaction"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Manage Subscriptions Sheet"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Refund Request Sheet"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups": [],
+  "version": {
+    "major": 3,
+    "minor": 0
+  }
+}
