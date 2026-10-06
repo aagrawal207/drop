@@ -110,6 +110,17 @@ How sign-in works: the app authenticates silently at launch and never forces the
 5. Let it validate and upload; it takes a few minutes to process before it shows under the version's Build section.
 6. Back in App Store Connect, on the version page, select the processed build.
 
+### CLI route (used for 1.2 build 3)
+
+No Xcode account is signed in, so automatic export fails. 1.2 (3) was archived with
+`xcodebuild archive`, then exported manually with the shared Apple Distribution
+certificate `YBW79S2M2T` (protected files under `~/Library/Application Support/Howzat/Signing`,
+loaded into a temporary keychain via `asc signing keychain install`, removed afterwards)
+and App Store profile `35847MJLLC` ("Drop App Store YBW79S2M2T 1.2-3"). Upload, version
+attach and processing used `asc publish appstore --wait`; metadata comes from
+`AppStore/metadata/` via `asc metadata push`. Profile `WY4QHG6634` uses certificate
+`W7NQ25R66K`, whose key sits in a locked keychain and triggers a password prompt; avoid it.
+
 ## Export Compliance
 
 Because `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption` is `NO`, App Store Connect won't ask the encryption question at upload. Drop uses no custom encryption — only HTTPS through Apple's frameworks (Game Center) and the Support link opening Safari, which is exempt. Nothing to file.
