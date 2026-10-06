@@ -6,7 +6,7 @@ Built with SpriteKit, Core Haptics, GameKit, and a bit of procedural audio. No t
 
 ## Play
 
-- **Steer** by tilting the device or by tapping/holding the left or right half of the screen.
+- **Steer** by tilting the device. A short tutorial shows this before the first run (replay it from Settings).
 - **Clean pass**: reach a gap in a single drop, no wall hits or extra bounces.
 - **Streak bonus**: three clean passes in a row start a growing bonus (+1, then +2, then +3) on each further clean pass. Hitting a wall or bouncing twice resets it.
 - **Zen mode** holds a constant speed you pick in Settings, with its own local best. Ranked is the mode that speeds up and feeds the leaderboard.

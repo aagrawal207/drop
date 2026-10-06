@@ -14,6 +14,7 @@ final class GameSettings {
         static let bounceSound = "bounceSoundEnabled"
         static let ballColor = "ballColorEnabled"
         static let zenSpeed = "zenSpeed"
+        static let hasSeenTutorial = "hasSeenTutorial"
         // Stats (kept separate from the legacy "highScore" key, which stays the
         // ranked best for continuity with existing installs).
         static let rankedBest = "highScore"
@@ -70,6 +71,13 @@ final class GameSettings {
     var zenSpeed: Double {
         get { double(forKey: Key.zenSpeed, default: Self.defaultZenSpeed) }
         set { UserDefaults.standard.set(newValue, forKey: Key.zenSpeed) }
+    }
+
+    /// Missing reads false, so installs from before the tutorial see it once too.
+    /// `bool(forKey:)` also honors a `-hasSeenTutorial YES` launch argument (UI tests).
+    var hasSeenTutorial: Bool {
+        get { UserDefaults.standard.bool(forKey: Key.hasSeenTutorial) }
+        set { UserDefaults.standard.set(newValue, forKey: Key.hasSeenTutorial) }
     }
 
     /// Double with a real default: `object(forKey:) == nil` distinguishes

@@ -3,6 +3,7 @@ import CoreMotion
 
 private enum GameState {
     case menu
+    case tutorial
     case playing
     case paused
     case gameOver
@@ -51,8 +52,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private var state: GameState = .menu {
         didSet {
-            // Keep the screen awake only while actively playing. A player steering
-            // by tilt never touches the screen, so without this the idle timer
+            // Keep the screen awake only while actively playing. Steering is
+            // tilt-only, so nobody touches the screen mid-run; without this the idle timer
             // dims and locks the device mid-run. Re-enabled on menu/pause/gameOver
             // so the phone still sleeps normally when not in a live game.
             UIApplication.shared.isIdleTimerDisabled = (state == .playing)
@@ -113,7 +114,16 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     // Controls
     private let motion = CMMotionManager()
     private var tiltX: CGFloat = 0
-    private var touchDirection: CGFloat = 0
+    #if DEBUG
+    /// The simulator has no accelerometer, so the screenshot bot steers by holding
+    /// a screen half. Debug builds only, and only with this launch argument.
+    private let debugTouchSteering = UserDefaults.standard.bool(forKey: "uiTestTouchSteering")
+    private var debugTouchDirection: CGFloat = 0
+    #endif
+
+    // First-run tutorial: the mode the player picked, started once they dismiss it.
+    private var tutorialMode: GameMode = .ranked
+    private var tutorialButton: SKNode?
 
     // UI (parented to the camera so it stays fixed on screen)
     private let scoreLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
@@ -430,10 +440,11 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         zenButton = zen
 
         let ctl = SKLabelNode(fontNamed: "AvenirNext-Regular")
-        ctl.text = "Tilt or touch left / right to steer"
+        ctl.text = "Tilt your phone to steer"
         ctl.fontSize = 16
         ctl.fontColor = SKColor(white: 0.7, alpha: 1)
-        ctl.position = CGPoint(x: 0, y: -size.height * 0.13)
+        // Anchored to the ZEN pill rather than screen height so it never crowds the pill.
+        ctl.position = CGPoint(x: 0, y: zen.position.y - 72)
         node.addChild(ctl)
 
         let rankedBest = GameSettings.shared.rankedBest
@@ -448,7 +459,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             hs.text = parts.joined(separator: "   •   ")
             hs.fontSize = 18
             hs.fontColor = SKColor(red: 1.0, green: 0.5, blue: 0.42, alpha: 1)
-            hs.position = CGPoint(x: 0, y: -size.height * 0.17)
+            hs.position = CGPoint(x: 0, y: zen.position.y - 106)
             node.addChild(hs)
         }
 
@@ -535,14 +546,111 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         return true
     }
 
-    /// Press feedback on a mode pill (quick scale dip), then start the run.
+    /// Press feedback on a mode pill (quick scale dip), then start the run, via
+    /// the tutorial if the player hasn't seen it yet.
     private func pressAndStart(_ button: SKNode, mode: GameMode) {
         HapticsManager.shared.uiTap()
         button.run(.sequence([
             .scale(to: 0.93, duration: 0.06),
             .scale(to: 1.0, duration: 0.06),
-            .run { [weak self] in self?.startGame(mode: mode) },
+            .run { [weak self] in
+                guard let self else { return }
+                if GameSettings.shared.hasSeenTutorial {
+                    self.startGame(mode: mode)
+                } else {
+                    self.showTutorial(mode: mode)
+                }
+            },
         ]))
+    }
+
+    // MARK: - Tutorial
+
+    /// One card shown before the first run: a phone rocking side to side with
+    /// the ball rolling downhill on its screen, so the gesture is shown, not described.
+    private func showTutorial(mode: GameMode) {
+        guard state == .menu else { return }
+        state = .tutorial
+        tutorialMode = mode
+        overlay?.removeFromParent()
+        gearNode = nil
+        leaderboardNode = nil
+        playButton = nil
+        zenButton = nil
+        // The parked title ball would sit on top of the illustration.
+        ball.isHidden = true
+
+        let node = SKNode()
+        node.zPosition = 20
+
+        let phone = SKShapeNode(rectOf: CGSize(width: 76, height: 136), cornerRadius: 16)
+        phone.fillColor = SKColor(white: 0, alpha: 0.35)
+        phone.strokeColor = SKColor(white: 0.9, alpha: 1)
+        phone.lineWidth = 3
+        phone.position = CGPoint(x: 0, y: size.height * 0.15)
+        node.addChild(phone)
+
+        // A floor with a gap on the phone's screen, and the ball above it.
+        let plankY: CGFloat = -30
+        let plankH: CGFloat = 7
+        for x in [CGFloat(-20), 20] {
+            let seg = SKSpriteNode(texture: plankTexture)
+            seg.size = CGSize(width: 20, height: plankH)
+            seg.position = CGPoint(x: x, y: plankY)
+            phone.addChild(seg)
+        }
+        let mini = SKSpriteNode(texture: ballTexture)
+        mini.size = CGSize(width: 16, height: 16)
+        mini.position = CGPoint(x: 0, y: plankY + plankH / 2 + 8)
+        phone.addChild(mini)
+
+        // Positive zRotation drops the left edge, so the ball rolls left: the
+        // same direction tilting the real phone steers.
+        let angle: CGFloat = 0.3
+        let swing: TimeInterval = 0.9
+        func rock(_ a: CGFloat) -> SKAction {
+            let r = SKAction.rotate(toAngle: a, duration: swing)
+            r.timingMode = .easeInEaseOut
+            return r
+        }
+        func roll(_ x: CGFloat) -> SKAction {
+            let m = SKAction.moveTo(x: x, duration: swing)
+            m.timingMode = .easeInEaseOut
+            return m
+        }
+        phone.run(.sequence([rock(angle), .repeatForever(.sequence([rock(-angle), rock(angle)]))]))
+        mini.run(.sequence([roll(-22), .repeatForever(.sequence([roll(22), roll(-22)]))]))
+
+        let title = SKLabelNode(fontNamed: "AvenirNext-Heavy")
+        title.text = "Tilt to steer"
+        title.fontSize = 32
+        title.fontColor = .white
+        title.verticalAlignmentMode = .center
+        title.position = CGPoint(x: 0, y: -size.height * 0.02)
+        node.addChild(title)
+
+        for (i, line) in ["Drop through the gaps.", "Don't get pushed off the top."].enumerated() {
+            let l = SKLabelNode(fontNamed: "AvenirNext-Medium")
+            l.text = line
+            l.fontSize = 18
+            l.fontColor = SKColor(white: 0.75, alpha: 1)
+            l.verticalAlignmentMode = .center
+            l.position = CGPoint(x: 0, y: -size.height * 0.075 - CGFloat(i) * 28)
+            node.addChild(l)
+        }
+
+        let start = makePill(text: "START", name: "start",
+                             fill: SKColor(red: 0.85, green: 0.25, blue: 0.20, alpha: 1),
+                             stroke: .clear,
+                             textColor: .white)
+        start.position = CGPoint(x: 0, y: -size.height * 0.2)
+        node.addChild(start)
+        tutorialButton = start
+
+        node.alpha = 0
+        node.run(.fadeIn(withDuration: 0.2))
+        cam.addChild(node)
+        overlay = node
     }
 
     private func startGame(mode: GameMode) {
@@ -554,6 +662,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         playButton = nil
         zenButton = nil
         menuButton = nil
+        tutorialButton = nil
+        ball.isHidden = false
         state = .playing
 
         floors.forEach { $0.removeFromParent() }
@@ -752,6 +862,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let node = SKNode()
         node.zPosition = 20
 
+        // Same dim as pause, faded in after the flash so the text never sits on bare planks.
+        let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.5), size: size)
+        dim.zPosition = -1
+        dim.alpha = 0
+        dim.run(.fadeIn(withDuration: 0.3))
+        node.addChild(dim)
+
         let over = SKLabelNode(fontNamed: "AvenirNext-Heavy")
         over.text = mode == .zen ? "ZEN OVER" : "GAME OVER"
         over.fontSize = 40
@@ -808,6 +925,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             } else if let zen = zenButton, zen.frame.insetBy(dx: -10, dy: -10).contains(p) {
                 pressAndStart(zen, mode: .zen)
             }
+        case .tutorial:
+            // Only the START pill dismisses it, so a stray tap can't skip the card.
+            guard let t = touches.first, let btn = tutorialButton,
+                  btn.frame.insetBy(dx: -10, dy: -10).contains(t.location(in: cam)) else { return }
+            tutorialButton = nil
+            GameSettings.shared.hasSeenTutorial = true
+            pressAndStart(btn, mode: tutorialMode)
         case .gameOver:
             if handleButtonTap(touches) { return }
             if handleMenuButtonTap(touches) { return }
@@ -821,33 +945,44 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             if handleMenuButtonTap(touches) { return }
             resumeGame()
         case .playing:
-            // Pause button tap, else steer.
+            // The pause button is the only touch target mid-run; steering is tilt.
             if let t = touches.first, let btn = pauseButton,
                btn.frame.insetBy(dx: -20, dy: -20).contains(t.location(in: cam)) {
                 HapticsManager.shared.uiTap()
                 pauseGame()
                 return
             }
-            updateTouchDirection(touches)
+            #if DEBUG
+            updateDebugTouchDirection(touches)
+            #endif
         }
     }
 
+    #if DEBUG
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if state == .playing { updateTouchDirection(touches) }
+        if state == .playing { updateDebugTouchDirection(touches) }
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        touchDirection = 0
+        debugTouchDirection = 0
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        touchDirection = 0
+        debugTouchDirection = 0
     }
 
-    private func updateTouchDirection(_ touches: Set<UITouch>) {
-        guard let t = touches.first else { return }
-        let x = t.location(in: self).x
-        touchDirection = x < size.width / 2 ? -1 : 1
+    private func updateDebugTouchDirection(_ touches: Set<UITouch>) {
+        guard debugTouchSteering, let t = touches.first else { return }
+        debugTouchDirection = t.location(in: self).x < size.width / 2 ? -1 : 1
+    }
+    #endif
+
+    /// Horizontal steering input, -1 (left) … 1 (right).
+    private var steerInput: CGFloat {
+        #if DEBUG
+        if debugTouchDirection != 0 { return debugTouchDirection }
+        #endif
+        return tiltX
     }
 
     // MARK: - Loop
@@ -887,10 +1022,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     override func didFinishUpdate() {
         guard state == .playing else { return }
 
-        // Steering: touch overrides tilt. Applied after physics so it isn't
-        // fighting the solver mid-step. Sensitivity scales the response.
+        // Steering, applied after physics so it isn't fighting the solver
+        // mid-step. Sensitivity scales the response.
         let sensitivity = CGFloat(GameSettings.shared.sensitivity)
-        let desiredVX = (touchDirection != 0 ? touchDirection : tiltX) * ballMaxHSpeed * sensitivity
+        let desiredVX = steerInput * ballMaxHSpeed * sensitivity
         if let body = ball.physicsBody {
             let newDX = body.velocity.dx + (desiredVX - body.velocity.dx) * 0.35
             body.velocity = CGVector(dx: newDX, dy: body.velocity.dy)

@@ -27,7 +27,7 @@ Game Center is Apple's service, so how it handles your player identity is covere
 
 ## Motion (accelerometer)
 
-You can steer the ball by tilting your device. When you do, Drop reads the accelerometer to move the ball left and right. That motion data is used in the moment and never stored, never sent anywhere, and never leaves your device. You can also steer by touch instead, if you prefer.
+You steer the ball by tilting your device. Drop reads the accelerometer to move the ball left and right. That motion data is used in the moment and never stored, never sent anywhere, and never leaves your device.
 
 ## Network access
 

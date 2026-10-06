@@ -106,9 +106,17 @@ final class ScreenshotBot: XCTestCase {
 
     // MARK: - The bot
 
-    func testCaptureScreenshots() throws {
+    /// Skips the first-run tutorial and enables the Debug-only touch steering
+    /// hook, since the simulator has no accelerometer to tilt.
+    func launchForPlay() -> XCUIApplication {
         let app = XCUIApplication()
+        app.launchArguments = ["-hasSeenTutorial", "YES", "-uiTestTouchSteering", "YES"]
         app.launch()
+        return app
+    }
+
+    func testCaptureScreenshots() throws {
+        let app = launchForPlay()
         sleep(2)
 
         // 1. Menu.
@@ -169,8 +177,7 @@ final class ScreenshotBot: XCTestCase {
     /// Captures the menu -> play transition frames, to verify the run starts
     /// with the title's own ball (the O of DROP) dropping in place.
     func testCaptureStartTransition() throws {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchForPlay()
         sleep(2)
         save("t0-menu")
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.49)).tap()
@@ -178,5 +185,18 @@ final class ScreenshotBot: XCTestCase {
             save(String(format: "t%d-start", i))
             usleep(150_000)
         }
+    }
+
+    /// The first-run tutorial card, as a fresh install sees it after tapping PLAY.
+    func testCaptureTutorial() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-hasSeenTutorial", "NO"]
+        app.launch()
+        sleep(2)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.49)).tap()
+        sleep(1)
+        save("05-tutorial")
+        usleep(900_000)
+        save("05b-tutorial")
     }
 }

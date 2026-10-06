@@ -121,7 +121,7 @@ On the version page:
 - **Version:** 1.0
 - **What's New:** "First release." is fine.
 - **Build:** the one you selected.
-- **App Review Information:** your contact info; leave demo-account fields empty (no login needed); notes like "No account needed. Tilt or tap left/right to steer. Game Center leaderboard is optional and the game is fully playable without signing in."
+- **App Review Information:** your contact info; leave demo-account fields empty (no login needed); notes like "No account needed. Tilt the phone left/right to steer. Game Center leaderboard is optional and the game is fully playable without signing in."
 - **Version Release:** manual or automatic, your call.
 
 Then **Add for Review** / **Submit for Review**.
