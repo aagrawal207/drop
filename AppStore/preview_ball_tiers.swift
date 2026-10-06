@@ -5,8 +5,9 @@
 // (they are pure CoreGraphics, y-up); the tinted render reimplements the same
 // math. If BallTexture.swift changes, re-copy the painters.
 //
-// Run:  swift AppStore/preview_ball_tiers.swift
-// Out:  /tmp/ball_tiers.png
+// Run:  swift AppStore/preview_ball_tiers.swift [BALLS_DIR]
+// Out:  /tmp/ball_tiers.png, plus BALLS_DIR/<tier>.png (600px, transparent) when given;
+//       tools/compose_store_screenshots.py uses those.
 
 import AppKit
 
@@ -255,3 +256,21 @@ let dest = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFStrin
 CGImageDestinationAddImage(dest, img, nil)
 CGImageDestinationFinalize(dest)
 print("wrote /tmp/ball_tiers.png")
+
+if CommandLine.arguments.count > 1 {
+    let dir = CommandLine.arguments[1]
+    try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+    let d: CGFloat = 600
+    for (i, (_, style)) in tiers.enumerated() {
+        let c = CGContext(data: nil, width: Int(d), height: Int(d), bitsPerComponent: 8, bytesPerRow: 0,
+                          space: CGColorSpaceCreateDeviceRGB(),
+                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: c, flipped: false)
+        drawBall(c, style: style, at: .zero, d: d)
+        let out = URL(fileURLWithPath: "\(dir)/\(i).png")
+        let dst = CGImageDestinationCreateWithURL(out as CFURL, "public.png" as CFString, 1, nil)!
+        CGImageDestinationAddImage(dst, c.makeImage()!, nil)
+        CGImageDestinationFinalize(dst)
+    }
+    print("wrote \(tiers.count) balls to \(dir)")
+}

@@ -28,7 +28,11 @@ final class TipJarFlow: XCTestCase {
         app.launchArguments = ["-hasSeenTutorial", "YES"]
         app.launch()
         sleep(2)
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.078)).tap()
+        let gear = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Settings")).firstMatch
+        XCTAssertTrue(gear.waitForExistence(timeout: 10))
+        let f = gear.frame, w = app.frame
+        app.coordinate(withNormalizedOffset: CGVector(dx: (f.midX - w.minX) / w.width,
+                                                      dy: (f.midY - w.minY) / w.height)).tap()
 
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         // The Form is lazy: the row only exists once scrolled into view.
@@ -50,7 +54,10 @@ final class TipJarFlow: XCTestCase {
         app.buttons[ids[0]].tap()
         XCTAssertTrue(app.alerts["Thank you"].waitForExistence(timeout: 20), "A completed tip must thank the player")
         app.alerts["Thank you"].buttons["OK"].tap()
-        XCTAssertTrue(app.staticTexts["One tip recorded on this device. Thank you."].waitForExistence(timeout: 5))
+        // The footer sits below the last tip; in the iPad sheet it starts off-screen.
+        let footer = app.staticTexts["One tip recorded on this device. Thank you."]
+        for _ in 0..<4 where !footer.exists { app.swipeUp() }
+        XCTAssertTrue(footer.waitForExistence(timeout: 5))
         XCTAssertEqual(session?.allTransactions().count, 1)
     }
 }

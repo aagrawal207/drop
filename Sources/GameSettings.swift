@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Tiny UserDefaults-backed store shared between the SwiftUI settings sheet and
 /// the SpriteKit scene. The scene reads these each frame / on demand, so changes
@@ -119,6 +120,9 @@ final class GameSettings {
         get { UserDefaults.standard.integer(forKey: Key.totalCleanPasses) }
         set { UserDefaults.standard.set(newValue, forKey: Key.totalCleanPasses) }
     }
+
+    /// What the player tilts, for steering copy.
+    static var deviceNoun: String { UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "phone" }
 
     static let minSensitivity = 0.5
     static let maxSensitivity = 2.0

@@ -45,9 +45,15 @@ Made by one person. If you hit a bug or have an idea, open an issue on GitHub.
 - A quick tutorial shows how to play before your first run. Replay it any time from Settings.
 - Game over screen is easier to read.
 
-## Screenshots (6.9", `APP_IPHONE_67` set)
-`AppStore/screenshots/01-streak.png` … `05-settings.png`, 1320 × 2868, captured from the
-1.2 build on the iPhone 18 Pro Max simulator with `UITests/ScreenshotBot.swift`.
+## Screenshots
+Six captioned slides per device, composed by `tools/compose_store_screenshots.py` from real
+captures (`UITests/StoreShots.swift` autopilot runs plus `ScreenshotBot`):
+- iPhone 6.9" (`APP_IPHONE_67`): `AppStore/screenshots/iphone/`, 1320 × 2868, iPhone 18 Pro Max simulator.
+- iPad 13" (`APP_IPAD_PRO_3GEN_129`): `AppStore/screenshots/ipad/`, 2064 × 2752, iPad Pro 13-inch (M5) simulator.
+
+Regenerate: run `StoreShots/testCaptureRun` (env `TEST_RUNNER_DROP_SHOT_UNTIL=650`) and
+`ScreenshotBot/testCaptureTutorial` on each simulator, then
+`swift AppStore/preview_ball_tiers.swift /tmp/drop-balls` and the compositor.
 
 ## Game Center
 Leaderboard `com.agraabhi.drop.highscore`, shown as "High Score" (en-US, no suffix).

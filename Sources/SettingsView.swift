@@ -69,7 +69,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Controls")
                 } footer: {
-                    Text("Tilt your phone to steer. Sensitivity is how strongly the tilt moves the ball. Bounciness is how high it springs off floors. Changes apply on your next run.")
+                    Text("Tilt your \(GameSettings.deviceNoun) to steer. Sensitivity is how strongly the tilt moves the ball. Bounciness is how high it springs off floors. Changes apply on your next run.")
                 }
 
                 Section {

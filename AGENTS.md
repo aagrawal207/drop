@@ -1,6 +1,6 @@
 # AGENTS.md
 
-iOS arcade game "Drop" (SpriteKit, Swift, iOS 17+, portrait only). No third-party dependencies, no test target, no CI, no lint config.
+iOS arcade game "Drop" (SpriteKit, Swift, iOS 17+, iPhone and iPad; portrait-only on iPhone). No third-party dependencies, no unit-test target, no CI, no lint config. `FallingBallUITests` holds screenshot/acceptance UI tests.
 
 ## Build
 
@@ -30,7 +30,10 @@ Bundle ID must stay `com.agraabhi.drop` — the old `com.agraabhi.FallingBall` i
 - **UserDefaults legacy key**: `rankedBest` is stored under the key `"highScore"` for continuity with existing installs. Never rename the key.
 - **`v == 0` means "never set"** pattern in `GameSettings` doubles (`sensitivity`, `bounciness`, `zenSpeed`) — safe only because valid ranges exclude 0. Prefer `object(forKey:) == nil` for new settings.
 - **Game Center is never a gate**: `authenticate()` deliberately does NOT present the sign-in sheet at launch; the pending VC is stashed and shown only when the player taps the trophy. Keep it that way.
-- **iPhone-only is deliberate**: `TARGETED_DEVICE_FAMILY: "1"` must stay in the *target-level* settings in project.yml — xcodegen sets `"1,2"` at the target level by default, which silently overrides a project-level value. With iPad included, App Store validation rejects the portrait-only orientation set (iPad multitasking requires all four).
+- **iPad letterboxes a fixed field**: on iPad the scene is a fixed 600×860 portrait field with `.aspectFit`, and `GameViewController` sizes the SKView to fit it over a walnut backdrop. iPad multitasking requires all four orientations and resizable windows, while physics needs fixed coordinates; don't switch iPad to `.resizeFill`. `TARGETED_DEVICE_FAMILY` lives at the *target* level in project.yml (xcodegen overrides a project-level value).
+- **Tilt follows interface orientation**: `startMotion` picks the accelerometer axis from the window scene's orientation, because iPad rotates. Horizontal speed scales with field width above 440pt, so iPhones are unaffected.
+- **Debug-only test hooks**: `-uiTestTouchSteering` (hold a screen half) and `-uiTestAutopilot` / `-uiTestAutopilotUntil N` (steer to the next gap) exist only in Debug builds, so simulators without an accelerometer can play. Scene buttons are accessibility elements; UI tests tap them by label.
+- **Tips are In-App Purchase only**: App Review rejected an external donation link. `TipJarService` (StoreKit 2, consumables `com.agraabhi.drop.tip.*`) is ported from Howzat; tips unlock nothing.
 - **App lifecycle workarounds** in `GameViewController` are deliberate: auto-pause on `didEnterBackground` (not `willResignActive` — that fires for Control Center and the Game Center banner), audio/haptic engines rebuilt on `willEnterForeground`, and `SKView.isPaused = false` forced on `didBecomeActive` because system overlays freeze the render loop. Don't simplify these.
 - GameKit's `authenticateHandler` is not guaranteed on the main thread — all UIKit/state work in `GameCenterManager` hops to main.
 - The Game Center leaderboard ID (`com.agraabhi.drop.highscore` in `GameCenterManager`) must match App Store Connect exactly. Achievements were deliberately removed in 1.1; don't reintroduce them.

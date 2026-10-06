@@ -1,17 +1,9 @@
 import UIKit
 
+// The window lives in SceneDelegate (named in the Info.plist scene manifest): apps
+// linked against the iOS 27 SDK must adopt the scene lifecycle or UIKit traps at launch.
 @main
-class AppDelegate: UIResponder, UIApplicationDelegate {
-    // Apps linked against the iOS 27 SDK must adopt the scene lifecycle or UIKit
-    // traps at launch, so the window lives in SceneDelegate.
-    func application(_ application: UIApplication,
-                     configurationForConnecting connectingSceneSession: UISceneSession,
-                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
-        let config = UISceneConfiguration(name: "Default", sessionRole: connectingSceneSession.role)
-        config.delegateClass = SceneDelegate.self
-        return config
-    }
-}
+class AppDelegate: UIResponder, UIApplicationDelegate {}
 
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?

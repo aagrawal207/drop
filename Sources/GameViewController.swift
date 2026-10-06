@@ -4,16 +4,29 @@ import SwiftUI
 
 class GameViewController: UIViewController {
     private weak var scene: GameScene?
+    private let skView = SKView(frame: UIScreen.main.bounds)
 
     override func loadView() {
-        view = SKView(frame: UIScreen.main.bounds)
+        let root = UIView(frame: UIScreen.main.bounds)
+        root.backgroundColor = .black
+        skView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        root.addSubview(skView)
+        view = root
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        guard let skView = view as? SKView else { return }
-        let scene = GameScene(size: skView.bounds.size)
-        scene.scaleMode = .resizeFill
+        let scene: GameScene
+        if Self.isPad {
+            // iPad windows rotate and resize (Stage Manager, Split View), but the physics
+            // world needs fixed coordinates, so a portrait field is letterboxed instead.
+            scene = GameScene(size: Self.padFieldSize)
+            scene.scaleMode = .aspectFit
+            installLetterboxBackdrop()
+        } else {
+            scene = GameScene(size: skView.bounds.size)
+            scene.scaleMode = .resizeFill
+        }
         scene.onOpenSettings = { [weak self] in self?.presentSettings() }
         scene.onShowLeaderboard = { [weak self] in self?.presentScores() }
         scene.onGameOver = { score in
@@ -70,7 +83,7 @@ class GameViewController: UIViewController {
     }
 
     @objc private func resumeRendering() {
-        (view as? SKView)?.isPaused = false
+        skView.isPaused = false
     }
 
     private func presentSettings() {
@@ -104,5 +117,38 @@ class GameViewController: UIViewController {
     }
 
     override var prefersStatusBarHidden: Bool { true }
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { Self.isPad ? .all : .portrait }
+
+    /// Darker walnut around the field, so the bars read as the same table rather than black.
+    private func installLetterboxBackdrop() {
+        let side = max(UIScreen.main.bounds.width, UIScreen.main.bounds.height)
+        let wood = WoodTexture.background(width: side, height: side).cgImage()
+        let backdrop = UIImageView(image: UIImage(cgImage: wood))
+        backdrop.frame = view.bounds
+        backdrop.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        backdrop.contentMode = .scaleAspectFill
+        let shade = UIView(frame: backdrop.bounds)
+        shade.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        shade.backgroundColor = UIColor(white: 0, alpha: 0.45)
+        backdrop.addSubview(shade)
+        view.insertSubview(backdrop, belowSubview: skView)
+        skView.autoresizingMask = []
+    }
+
+    /// On iPad the SKView itself is the fitted portrait field, so nothing letterboxes
+    /// inside SpriteKit and the backdrop shows around it.
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard Self.isPad, view.bounds.width > 0, view.bounds.height > 0 else { return }
+        let field = Self.padFieldSize
+        let scale = min(view.bounds.width / field.width, view.bounds.height / field.height)
+        let size = CGSize(width: field.width * scale, height: field.height * scale)
+        let frame = CGRect(x: view.bounds.midX - size.width / 2, y: view.bounds.midY - size.height / 2,
+                           width: size.width, height: size.height).integral
+        if skView.frame != frame { skView.frame = frame }
+    }
+
+    private static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    /// Close to an 11-inch iPad's portrait aspect, so portrait nearly fills the screen.
+    private static let padFieldSize = CGSize(width: 600, height: 860)
 }

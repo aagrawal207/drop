@@ -44,7 +44,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     /// Difficulty ramps toward max speed with a fast-early, plateauing curve
     /// (see camSpeed(for:)) rather than a slow constant climb.
     private let rampTimeConstant: TimeInterval = 38   // seconds to ~63% of range
-    private let ballMaxHSpeed: CGFloat = 340
+    /// Tuned for iPhone widths (up to 440pt). The wider iPad field scales it so a
+    /// gap-to-gap traverse takes the same time.
+    private var ballMaxHSpeed: CGFloat { 340 * max(1, size.width / 440) }
     private let sideMargin: CGFloat = 6
     /// How far above the camera centre the ball ideally sits while falling.
     private let followBias: CGFloat = 0.14
@@ -119,6 +121,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     /// a screen half. Debug builds only, and only with this launch argument.
     private let debugTouchSteering = UserDefaults.standard.bool(forKey: "uiTestTouchSteering")
     private var debugTouchDirection: CGFloat = 0
+    /// Screenshot capture on any device: steers toward the next real gap. Debug builds only.
+    private let debugAutopilot = UserDefaults.standard.bool(forKey: "uiTestAutopilot")
+    /// Score at which the autopilot lets go, so a run ends in a real game over.
+    private let debugAutopilotUntil = UserDefaults.standard.integer(forKey: "uiTestAutopilotUntil")
     #endif
 
     // First-run tutorial: the mode the player picked, started once they dismiss it.
@@ -275,11 +281,21 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         cam.addChild(modeBadge)
     }
 
+    /// Top safe-area inset in scene units. On iPad the field is letterboxed and scaled,
+    /// so the view inset is reduced by the bar above the field and converted to scene points.
+    private var topInset: CGFloat {
+        guard let view, view.bounds.height > 0 else { return 59 }
+        let raw = view.safeAreaInsets.top
+        guard scaleMode == .aspectFit else { return raw > 0 ? raw : 59 }
+        let scale = min(view.bounds.width / size.width, view.bounds.height / size.height)
+        let barAbove = (view.bounds.height - size.height * scale) / 2
+        return max(24, (raw - barAbove) / scale + 12)
+    }
+
     /// Place the score just below the safe-area top inset (clears Dynamic Island).
     /// Read at show-time because insets can be zero during didMove.
     private func positionScoreLabel() {
-        let topInset = view?.safeAreaInsets.top ?? 59
-        let inset = topInset > 0 ? topInset : 59
+        let inset = topInset
         scoreLabel.position = CGPoint(x: 0, y: size.height / 2 - inset - 12)
         modeBadge.position = CGPoint(x: 0, y: size.height / 2 - inset - 64)
         comboLabel.position = CGPoint(x: 0, y: size.height / 2 - inset - 84)
@@ -290,7 +306,14 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         motion.accelerometerUpdateInterval = 1.0 / 60.0
         motion.startAccelerometerUpdates(to: .main) { [weak self] data, _ in
             guard let self, let a = data?.acceleration else { return }
-            self.tiltX = CGFloat(a.x)
+            // Accelerometer axes are fixed to the device, so pick the axis that runs
+            // left-to-right on screen in the current interface orientation (iPad rotates).
+            switch self.view?.window?.windowScene?.effectiveGeometry.interfaceOrientation {
+            case .landscapeLeft: self.tiltX = CGFloat(a.y)
+            case .landscapeRight: self.tiltX = CGFloat(-a.y)
+            case .portraitUpsideDown: self.tiltX = CGFloat(-a.x)
+            default: self.tiltX = CGFloat(a.x)
+            }
         }
     }
 
@@ -343,7 +366,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         body.friction = 0.3
         body.restitution = 0.3
         node.physicsBody = body
-        node.userData = ["scored": false]
+        node.userData = ["scored": false, "gapX": gapCenterX]
         return node
     }
 
@@ -440,7 +463,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         zenButton = zen
 
         let ctl = SKLabelNode(fontNamed: "AvenirNext-Regular")
-        ctl.text = "Tilt your phone to steer"
+        ctl.text = "Tilt your \(GameSettings.deviceNoun) to steer"
         ctl.fontSize = 16
         ctl.fontColor = SKColor(white: 0.7, alpha: 1)
         // Anchored to the ZEN pill rather than screen height so it never crowds the pill.
@@ -471,8 +494,6 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     /// Settings gear, top-right, clear of the safe-area inset.
     private func addGear(to node: SKNode) {
-        let raw = view?.safeAreaInsets.top ?? 59
-        let topInset = raw > 0 ? raw : 59
         let gear = SKLabelNode(fontNamed: "AvenirNext-Regular")
         gear.text = "⚙"
         gear.fontSize = 34
@@ -480,14 +501,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         gear.verticalAlignmentMode = .center
         gear.position = CGPoint(x: size.width / 2 - 36, y: size.height / 2 - topInset - 16)
         gear.name = "gear"
+        markButton(gear, label: "Settings")
         node.addChild(gear)
         gearNode = gear
     }
 
     /// Leaderboard button, top-left, mirroring the gear.
     private func addLeaderboardButton(to node: SKNode) {
-        let raw = view?.safeAreaInsets.top ?? 59
-        let topInset = raw > 0 ? raw : 59
         let lb = SKLabelNode(fontNamed: "AvenirNext-Regular")
         lb.text = "🏆"
         lb.fontSize = 30
@@ -495,6 +515,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         lb.horizontalAlignmentMode = .center
         lb.position = CGPoint(x: -size.width / 2 + 36, y: size.height / 2 - topInset - 16)
         lb.name = "leaderboard"
+        markButton(lb, label: "Scores")
         node.addChild(lb)
         leaderboardNode = lb
     }
@@ -516,8 +537,17 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         label.fontColor = textColor
         label.verticalAlignmentMode = .center
         label.name = name           // taps on the label count as the button
+        label.isAccessibilityElement = false
         pill.addChild(label)
+        markButton(pill, label: text.filter { $0.isLetter || $0 == " " }.trimmingCharacters(in: .whitespaces).capitalized)
         return pill
+    }
+
+    /// Exposes a scene button to VoiceOver and UI tests; SpriteKit derives its frame.
+    private func markButton(_ node: SKNode, label: String) {
+        node.isAccessibilityElement = true
+        node.accessibilityLabel = label
+        node.accessibilityTraits = .button
     }
 
     /// If the tap hit the gear or leaderboard button, handle it and return true.
@@ -712,8 +742,6 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     /// Small pause button, top-right during play (where the gear sits on menus).
     private func addPauseButton() {
         pauseButton?.removeFromParent()
-        let raw = view?.safeAreaInsets.top ?? 59
-        let topInset = raw > 0 ? raw : 59
         let btn = SKLabelNode(fontNamed: "AvenirNext-Bold")
         btn.text = "❚❚"
         btn.fontSize = 26
@@ -722,6 +750,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         btn.horizontalAlignmentMode = .center
         btn.position = CGPoint(x: size.width / 2 - 36, y: size.height / 2 - topInset - 16)
         btn.name = "pause"
+        markButton(btn, label: "Pause")
         btn.zPosition = 15
         cam.addChild(btn)
         pauseButton = btn
@@ -786,6 +815,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         btn.verticalAlignmentMode = .center
         btn.position = CGPoint(x: 0, y: y)
         btn.name = "mainmenu"
+        markButton(btn, label: "Main Menu")
         node.addChild(btn)
         menuButton = btn
     }
@@ -981,9 +1011,20 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var steerInput: CGFloat {
         #if DEBUG
         if debugTouchDirection != 0 { return debugTouchDirection }
+        if debugAutopilot { return autopilotInput }
         #endif
         return tiltX
     }
+
+    #if DEBUG
+    private var autopilotInput: CGFloat {
+        if debugAutopilotUntil > 0, score >= debugAutopilotUntil { return 0 }
+        let below = floors.filter { $0.position.y < ball.position.y - ballRadius }
+        guard let next = below.max(by: { $0.position.y < $1.position.y }),
+              let gapX = next.userData?["gapX"] as? CGFloat else { return 0 }
+        return max(-1, min(1, (gapX - ball.position.x) / 50))
+    }
+    #endif
 
     // MARK: - Loop
 

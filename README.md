@@ -25,7 +25,7 @@ xcodebuild -project FallingBall.xcodeproj -scheme FallingBall \
 The generated `FallingBall.xcodeproj` and `FallingBall.entitlements` are not tracked, so run `xcodegen generate` after cloning.
 
 - Swift, SpriteKit, iOS 17+
-- Portrait only
+- iPhone (portrait) and iPad (any orientation; the field is letterboxed)
 - Bundle ID: `com.agraabhi.drop`
 
 ## Project layout

@@ -104,6 +104,16 @@ final class ScreenshotBot: XCTestCase {
         return nil
     }
 
+    /// Taps a SpriteKit button by its accessibility label. SpriteKit overlay parents
+    /// report empty frames, so the tap goes to the element's centre coordinate.
+    func tapScene(_ label: String, in app: XCUIApplication) throws {
+        let el = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
+        XCTAssertTrue(el.waitForExistence(timeout: 10), "Missing scene button: \(label)")
+        let f = el.frame, w = app.frame
+        app.coordinate(withNormalizedOffset: CGVector(dx: (f.midX - w.minX) / w.width,
+                                                      dy: (f.midY - w.minY) / w.height)).tap()
+    }
+
     // MARK: - The bot
 
     /// Skips the first-run tutorial and enables the Debug-only touch steering
@@ -122,9 +132,8 @@ final class ScreenshotBot: XCTestCase {
         // 1. Menu.
         save("01-menu")
 
-        // 2. Start a ranked run: tap the PLAY pill (center, 8pt above middle).
-        let play = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.49))
-        play.tap()
+        // 2. Start a ranked run.
+        try tapScene("Play", in: app)
         sleep(1)
 
         // 3. Play with the pixel bot, dumping frames as we go. Steering: hold
@@ -163,8 +172,7 @@ final class ScreenshotBot: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         sleep(2)
-        // Gear sits top-right (36pt from the right edge, below the safe area).
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.078)).tap()
+        try tapScene("Settings", in: app)
         sleep(2)
         save("04-settings")
         // Bottom of the sheet too (scoring / about / more-apps sections).
@@ -180,7 +188,7 @@ final class ScreenshotBot: XCTestCase {
         let app = launchForPlay()
         sleep(2)
         save("t0-menu")
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.49)).tap()
+        try tapScene("Play", in: app)
         for i in 1...5 {
             save(String(format: "t%d-start", i))
             usleep(150_000)
@@ -193,7 +201,7 @@ final class ScreenshotBot: XCTestCase {
         app.launchArguments = ["-hasSeenTutorial", "NO"]
         app.launch()
         sleep(2)
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.49)).tap()
+        try tapScene("Play", in: app)
         sleep(1)
         save("05-tutorial")
         usleep(900_000)
