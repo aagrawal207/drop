@@ -1,4 +1,4 @@
-# Drop: App Store Listing (v1.2)
+# Drop: App Store Listing (v1.3)
 
 Mirrors what is in App Store Connect. The source of truth for `asc metadata push` is
 `AppStore/metadata/` (app-info and version JSON); keep this file in sync with it.
@@ -40,10 +40,10 @@ Features:
 
 Made by one person. If you hit a bug or have an idea, open an issue on GitHub.
 
-## What's New (v1.2)
-- Tilt is now the way to steer. Touch steering is gone, so taps never fight your tilt mid-run.
-- A quick tutorial shows how to play before your first run. Replay it any time from Settings.
-- Game over screen is easier to read.
+## What's New (v1.3)
+- Rate Drop any time from Settings.
+- After a good run, regular players may see a quiet link to leave a tip. It never interrupts play.
+- Small polish and fixes.
 
 ## Screenshots
 Six captioned slides per device, composed by `tools/compose_store_screenshots.py` from real
