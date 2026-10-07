@@ -111,6 +111,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var nextMilestone = 10
     /// Ball colour tier currently shown (see BallPalette); reset each run.
     private var ballTier = 0
+    /// Floors cleared this run, separate from score because streak bonuses inflate score.
+    private var floorsThisRun = 0
+    private var bestDropMarker: BestDropMarker?
+    private var recordMode: RunMode { mode == .zen ? .zen : .ranked }
 
     /// The high score for the active mode (ranked feeds Game Center; zen is local).
     private var highScore: Int {
@@ -712,6 +716,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         elapsed = 0
         bankedPlaytime = 0
         score = 0
+        floorsThisRun = 0
         cleanStreak = 0
         bestStreakThisRun = 0
         bouncesSinceGap = 0
@@ -747,6 +752,31 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         ball.physicsBody?.isDynamic = true
 
         fillFloorsBelow()
+        placeBestDropMarker(firstFloorY: firstY)
+    }
+
+    /// Marks the deepest floor of any earlier run; a first-ever run has nothing to chase.
+    private func placeBestDropMarker(firstFloorY: CGFloat) {
+        removeBestDropMarker()
+        let deepest = RunRecords.shared.deepestFloor(for: recordMode)
+        guard deepest > 0 else { return }
+        let marker = BestDropMarker(
+            y: BestDropMarker.y(forFloor: deepest, firstFloorY: firstFloorY, spacing: floorSpacing),
+            fieldWidth: size.width)
+        addChild(marker.node)
+        bestDropMarker = marker
+    }
+
+    private func removeBestDropMarker() {
+        bestDropMarker?.node.removeFromParent()
+        bestDropMarker = nil
+    }
+
+    private func checkBestDropPassed() {
+        guard let marker = bestDropMarker, marker.checkPassed(ballY: ball.position.y) else { return }
+        cam.addChild(BestDropMarker.celebrationLabel(
+            at: CGPoint(x: 0, y: scoreLabel.position.y - 100)))
+        HapticsManager.shared.uiTap()
     }
 
     /// Small pause button, top-right during play (where the gear sits on menus).
@@ -848,6 +878,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         setBallTier(0, animated: false)
         floors.forEach { $0.removeFromParent() }
         floors.removeAll()
+        removeBestDropMarker()
         cam.position = CGPoint(x: size.width / 2, y: 0)
         showMenu()
     }
@@ -894,6 +925,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         // Capture BEFORE updating the best — otherwise "Score: 42  Best: 42"
         // gives no hint the run just set a record.
         let isNewBest = score > highScore
+        // Recorded before the best is stored: first use seeds the top list from that best.
+        let record = RunRecords.shared.record(score: score, floors: floorsThisRun, mode: recordMode)
+        removeBestDropMarker()
         if isNewBest {
             highScore = score                       // routes to ranked or zen best
             if mode == .zen { GameSettings.shared.zenBestDuration = elapsed }
@@ -935,21 +969,47 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             ]))
         }
 
+        var notes: [GameOverNote] = []
+        if !isNewBest, let message = record.message {
+            notes.append(GameOverNote(text: message, color: SKColor(white: 0.78, alpha: 1)))
+        }
+        let notesBottom = addGameOverNotes(notes, to: node, below: sc.position.y)
+
+        // Notes push the buttons down rather than crowding them; otherwise spacing tracks field height.
+        let againY = min(-size.height * 0.06, notesBottom - 40)
         let again = SKLabelNode(fontNamed: "AvenirNext-Medium")
         again.text = "Tap to play again"
         again.fontSize = 22
         again.fontColor = SKColor(red: 1.0, green: 0.5, blue: 0.42, alpha: 1)
-        again.position = CGPoint(x: 0, y: -size.height * 0.06)
+        again.position = CGPoint(x: 0, y: againY)
         node.addChild(again)
 
         // Main Menu button, so the player can switch modes instead of replaying.
-        addMenuButton(to: node, y: -size.height * 0.12)
+        addMenuButton(to: node, y: againY - size.height * 0.06)
         if offerTip { addTipLine(to: node) }
 
         addGear(to: node)
         addLeaderboardButton(to: node)
         cam.addChild(node)
         overlay = node
+    }
+
+    /// Soft lines under the score baseline `y`; returns the lowest baseline used (`y` when empty).
+    /// Capped at two so the buttons below still clear the tip line on a 667pt-tall field.
+    private func addGameOverNotes(_ notes: [GameOverNote], to node: SKNode, below y: CGFloat) -> CGFloat {
+        var baseline = y
+        for (i, note) in notes.prefix(2).enumerated() {
+            baseline -= i == 0 ? 30 : 26
+            let l = SKLabelNode(fontNamed: "AvenirNext-Medium")
+            l.text = note.text
+            l.fontSize = 18
+            l.fontColor = note.color
+            l.position = CGPoint(x: 0, y: baseline)
+            l.alpha = 0
+            l.run(.sequence([.wait(forDuration: 0.25 + 0.1 * Double(i)), .fadeIn(withDuration: 0.3)]))
+            node.addChild(l)
+        }
+        return baseline
     }
 
     /// A footnote-sized line near the bottom, faded in after the death moment has passed,
@@ -1130,6 +1190,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             return false
         }
         fillFloorsBelow()
+        checkBestDropPassed()
 
         // Game over: the ball has been pushed to the top of the screen.
         if ball.position.y + ballRadius >= viewTop - 4 {
@@ -1162,6 +1223,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         }
 
         score += gained
+        floorsThisRun += 1
         scoreLabel.text = "\(score)"
         bouncesSinceGap = 0                         // reset for the next hole
         updateBallTier()                            // colour warms/cools with score
