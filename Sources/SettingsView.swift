@@ -139,6 +139,18 @@ struct SettingsView: View {
                         }
                     }
                     .accessibilityIdentifier("settings.tipJar")
+
+                    Link(destination: URL(string: "https://apps.apple.com/app/id6789235254?action=write-review")!) {
+                        HStack {
+                            Label("Rate Drop", systemImage: "star.fill")
+                                .foregroundStyle(.orange)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityIdentifier("settings.rate")
                 } header: {
                     Text("About")
                 } footer: {

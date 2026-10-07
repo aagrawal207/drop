@@ -1,10 +1,15 @@
 import UIKit
 import SpriteKit
 import SwiftUI
+import StoreKit
 
 class GameViewController: UIViewController {
     private weak var scene: GameScene?
     private let skView = SKView(frame: UIScreen.main.bounds)
+    private let engagement = EngagementPolicy()
+    /// At most one ask of either kind per launch, so a session never carries both.
+    private var promptedThisSession = false
+    private var pendingReview: Task<Void, Never>?
 
     override func loadView() {
         let root = UIView(frame: UIScreen.main.bounds)
@@ -32,11 +37,14 @@ class GameViewController: UIViewController {
         scene.onGameOver = { score in
             GameCenterManager.shared.submit(score: score)
         }
+        scene.onRunFinished = { [weak self] run in self?.followUp(after: run) ?? false }
+        scene.onOpenTipJar = { [weak self] in self?.presentTipJar() }
         skView.presentScene(scene)
         skView.ignoresSiblingOrder = true
         self.scene = scene
 
         GameCenterManager.shared.authenticate()
+        engagement.recordLaunch()
         // Approvals and interrupted tips arrive on the App Store's schedule, not while the sheet is open.
         TipJarService.shared.observeTransactions()
 
@@ -84,6 +92,82 @@ class GameViewController: UIViewController {
 
     @objc private func resumeRendering() {
         skView.isPaused = false
+    }
+
+    // MARK: - Rating and tip prompts
+
+    private var marketingVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+    }
+
+    /// Screenshot and acceptance runs must never meet a review sheet or the tip line.
+    private static let promptsSuppressed: Bool = {
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains { $0.hasPrefix("-uiTest") }
+        #else
+        return false
+        #endif
+    }()
+
+    /// Debug `-engagementForce review|tip` skips the thresholds without touching stored progress.
+    private static var forcedPrompt: String? {
+        #if DEBUG
+        return UserDefaults.standard.string(forKey: "engagementForce")
+        #else
+        return nil
+        #endif
+    }
+
+    /// Returns true when the scene should show the tip line on this game-over screen.
+    private func followUp(after run: RunSummary) -> Bool {
+        pendingReview?.cancel()
+        pendingReview = nil
+        guard !Self.promptsSuppressed else { return false }
+        if let forced = Self.forcedPrompt {
+            guard !promptedThisSession else { return false }
+            if forced == "review" { scheduleReview(record: false) }
+            return forced == "tip" ? markPrompted() : false
+        }
+
+        engagement.recordCompletedRun()
+        guard run.endedWell, !promptedThisSession else { return false }
+        if engagement.canRequestReview(version: marketingVersion) {
+            scheduleReview(record: true)
+            return false
+        }
+        if engagement.canShowTipLine(hasTipped: TipJarService.shared.tipCount > 0) {
+            engagement.recordTipLineShown()
+            return markPrompted()
+        }
+        return false
+    }
+
+    private func markPrompted() -> Bool {
+        promptedThisSession = true
+        return true
+    }
+
+    /// Waits for the game-over screen to settle, then asks only if the player is still
+    /// looking at it: replaying, opening a sheet or leaving the app forfeits the moment.
+    private func scheduleReview(record: Bool) {
+        pendingReview = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1.6))
+            guard let self, !Task.isCancelled, !self.promptedThisSession,
+                  self.scene?.isShowingGameOver == true, self.presentedViewController == nil,
+                  UIApplication.shared.applicationState == .active,
+                  let windowScene = self.view.window?.windowScene,
+                  windowScene.activationState == .foregroundActive else { return }
+            if record { self.engagement.recordReviewRequest(version: self.marketingVersion) }
+            self.promptedThisSession = true
+            AppStore.requestReview(in: windowScene)
+        }
+    }
+
+    private func presentTipJar() {
+        guard presentedViewController == nil else { return }
+        let host = UIHostingController(rootView: TipJarView())
+        host.modalPresentationStyle = .formSheet
+        present(host, animated: true)
     }
 
     private func presentSettings() {

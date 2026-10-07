@@ -33,6 +33,14 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     var onShowLeaderboard: (() -> Void)?
     /// Called with the final score when a game ends (for leaderboard submission).
     var onGameOver: ((Int) -> Void)?
+    /// Called once per finished run, before its overlay is built. Returning true
+    /// adds the quiet tip line to that game-over screen.
+    var onRunFinished: ((RunSummary) -> Bool)?
+    /// Called when the player taps the tip line.
+    var onOpenTipJar: (() -> Void)?
+
+    /// The review sheet only appears over a settled game-over screen, never mid-run.
+    var isShowingGameOver: Bool { state == .gameOver }
 
     // Tunables — the "feel" knobs.
     private let ballRadius: CGFloat = 17
@@ -141,6 +149,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var zenButton: SKNode?
     private var menuButton: SKLabelNode?
     private var pauseButton: SKLabelNode?
+    private var tipLine: SKLabelNode?
     /// Small "ZEN" badge under the score during zen runs, so the player always
     /// knows whether the run counts for the leaderboard. Ranked is the default
     /// and gets no badge — labeling the exception is enough.
@@ -693,6 +702,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         zenButton = nil
         menuButton = nil
         tutorialButton = nil
+        tipLine = nil
         ball.isHidden = false
         state = .playing
 
@@ -828,6 +838,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         gearNode = nil
         leaderboardNode = nil
         menuButton = nil
+        tipLine = nil
         pauseButton?.removeFromParent()
         pauseButton = nil
         physicsWorld.speed = 1        // in case we came from pause
@@ -888,6 +899,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             if mode == .zen { GameSettings.shared.zenBestDuration = elapsed }
             else { GameSettings.shared.rankedBestDuration = elapsed }
         }
+        let offerTip = onRunFinished?(RunSummary(score: score, duration: elapsed, isNewBest: isNewBest)) ?? false
 
         let node = SKNode()
         node.zPosition = 20
@@ -932,11 +944,38 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Main Menu button, so the player can switch modes instead of replaying.
         addMenuButton(to: node, y: -size.height * 0.12)
+        if offerTip { addTipLine(to: node) }
 
         addGear(to: node)
         addLeaderboardButton(to: node)
         cam.addChild(node)
         overlay = node
+    }
+
+    /// A footnote-sized line near the bottom, faded in after the death moment has passed,
+    /// so it reads as an aside rather than part of the game-over message.
+    private func addTipLine(to node: SKNode) {
+        let line = SKLabelNode(fontNamed: "AvenirNext-Medium")
+        line.text = "Enjoying Drop? Leave a tip ☕"
+        line.fontSize = 16
+        line.fontColor = SKColor(red: 1.0, green: 0.68, blue: 0.76, alpha: 1)
+        line.verticalAlignmentMode = .center
+        line.position = CGPoint(x: 0, y: -size.height / 2 + 72)
+        line.name = "tipline"
+        markButton(line, label: "Leave a tip")
+        line.alpha = 0
+        line.run(.sequence([.wait(forDuration: 0.9), .fadeAlpha(to: 0.85, duration: 0.4)]))
+        node.addChild(line)
+        tipLine = line
+    }
+
+    private func handleTipLineTap(_ touches: Set<UITouch>) -> Bool {
+        // Before it has faded in, a tap there is meant as "play again".
+        guard let t = touches.first, let line = tipLine, line.alpha > 0.5,
+              line.frame.insetBy(dx: -16, dy: -14).contains(t.location(in: cam)) else { return false }
+        HapticsManager.shared.uiTap()
+        onOpenTipJar?()
+        return true
     }
 
     // MARK: - Input
@@ -965,6 +1004,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .gameOver:
             if handleButtonTap(touches) { return }
             if handleMenuButtonTap(touches) { return }
+            if handleTipLineTap(touches) { return }
             HapticsManager.shared.uiTap()
             overlay?.removeFromParent()
             overlay = nil
