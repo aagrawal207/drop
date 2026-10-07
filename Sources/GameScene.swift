@@ -111,6 +111,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var nextMilestone = 10
     /// Ball colour tier currently shown (see BallPalette); reset each run.
     private var ballTier = 0
+    /// BallPalette tiers the last finished run unlocked, for the game-over screen.
+    private(set) var runUnlockedSkins: [Int] = []
 
     /// The high score for the active mode (ranked feeds Game Center; zen is local).
     private var highScore: Int {
@@ -150,6 +152,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var menuButton: SKLabelNode?
     private var pauseButton: SKLabelNode?
     private var tipLine: SKLabelNode?
+    /// Invisible tap target over the title's O; only hit-tested in menu state.
+    private var titleBallButton: SKNode?
     /// Small "ZEN" badge under the score during zen runs, so the player always
     /// knows whether the run counts for the leaderboard. Ranked is the default
     /// and gets no badge — labeling the exception is enough.
@@ -449,6 +453,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         node.addChild(right)
         ball.position = CGPoint(x: size.width / 2 + titleBallOffsetX,
                                 y: cam.position.y + titleY)
+        setBallTier(BallSkins.shared.selection.startTier, animated: false)
+        addTitleBallButton(to: node, at: CGPoint(x: titleBallOffsetX, y: titleY))
 
         // Explicit mode buttons. The old menu started a ranked run on ANY tap
         // (with zen as a bare text line) — easy to mis-tap into a scored run,
@@ -574,6 +580,60 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             return true
         }
         return false
+    }
+
+    // MARK: - Title ball (skin picker)
+
+    /// The title's O doubles as the skin picker. The tap target lives in the
+    /// overlay because the ball itself is a world node with no fixed frame.
+    private func addTitleBallButton(to node: SKNode, at position: CGPoint) {
+        let target = SKSpriteNode(color: .clear, size: CGSize(width: 48, height: 48))
+        target.position = position
+        target.name = "titleball"
+        markButton(target, label: "Ball: \(BallSkins.shared.selection.name)")
+        node.addChild(target)
+        titleBallButton = target
+    }
+
+    /// Picks up a skin chosen in Settings while the menu sits underneath.
+    private func syncTitleBall() {
+        let choice = BallSkins.shared.selection
+        if ballTier != choice.startTier { setBallTier(choice.startTier, animated: false) }
+        let label = "Ball: \(choice.name)"
+        if titleBallButton?.accessibilityLabel != label { titleBallButton?.accessibilityLabel = label }
+    }
+
+    private func handleTitleBallTap(_ touches: Set<UITouch>) -> Bool {
+        guard let t = touches.first, let target = titleBallButton,
+              target.frame.contains(t.location(in: cam)) else { return false }
+        // Swallow the tap even with nothing to cycle, so it never falls through to PLAY.
+        guard let choice = BallSkins.shared.cycleSelection() else { return true }
+        HapticsManager.shared.uiTap()
+        setBallTier(choice.startTier, animated: true)
+        target.accessibilityLabel = "Ball: \(choice.name)"
+        UIAccessibility.post(notification: .announcement, argument: choice.name)
+        showTitleBallCaption(choice == .evolving ? "Evolving: changes as you climb" : choice.name,
+                             below: target)
+        return true
+    }
+
+    private func showTitleBallCaption(_ text: String, below target: SKNode) {
+        target.parent?.childNode(withName: "titleballcaption")?.removeFromParent()
+        let caption = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+        caption.name = "titleballcaption"
+        caption.text = text
+        caption.fontSize = 15
+        caption.fontColor = SKColor(white: 0.85, alpha: 1)
+        caption.verticalAlignmentMode = .center
+        caption.position = CGPoint(x: 0, y: target.position.y - 42)
+        caption.alpha = 0
+        caption.run(.sequence([
+            .fadeIn(withDuration: 0.12),
+            .wait(forDuration: 1.3),
+            .fadeOut(withDuration: 0.4),
+            .removeFromParent(),
+        ]))
+        target.parent?.addChild(caption)
     }
 
     /// If the tap hit the "Main Menu" button, return to the menu and return true.
@@ -716,7 +776,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         bestStreakThisRun = 0
         bouncesSinceGap = 0
         nextMilestone = milestoneEvery
-        setBallTier(0, animated: false)   // back to the classic red each run
+        setBallTier(BallSkins.shared.selection.startTier, animated: false)
         scoreLabel.text = "0"
         scoreLabel.isHidden = false
         comboLabel.isHidden = true
@@ -874,6 +934,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Lifetime time played (both modes) — the part not already banked at pause.
         bankPlaytime()
+        runUnlockedSkins = BallSkins.shared.recordRun(score: score)
 
         // Ranked scores feed Game Center; Zen never does (self-set speed).
         if mode == .ranked { onGameOver?(score) }
@@ -985,6 +1046,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .menu:
             // Gear / leaderboard taps handled first.
             if handleButtonTap(touches) { return }
+            if handleTitleBallTap(touches) { return }
             // Explicit mode buttons only — no implicit start. A stray tap must
             // not launch a ranked (leaderboard-scored) run by accident.
             guard let t = touches.first else { return }
@@ -1076,6 +1138,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let rawDt = lastUpdate == 0 ? 0 : min(currentTime - lastUpdate, 0.5)
         lastUpdate = currentTime
         let dt = min(rawDt, 1.0 / 30.0)   // clamp to avoid physics hitches
+        if state == .menu { syncTitleBall() }
         guard state == .playing else { return }
 
         // Sample the ball's velocity before the solver runs this frame; didBegin
@@ -1204,11 +1267,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // MARK: - Ball colour (live progress)
 
-    /// Swap the ball to the colour tier its score has reached, if it changed.
-    /// No-op when the player has turned colour changes off.
+    /// Swap the ball to the tier the chosen skin calls for at this score. Read
+    /// live, so a skin picked from Settings mid-run lands on the next hole.
     private func updateBallTier() {
-        guard GameSettings.shared.ballColorEnabled else { return }
-        let t = BallPalette.tierIndex(for: score)
+        let t = BallSkins.shared.selection.tier(forScore: score)
         guard t != ballTier else { return }
         setBallTier(t, animated: true)
     }
