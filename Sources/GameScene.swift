@@ -143,13 +143,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private let scoreLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
     private let comboLabel = SKLabelNode(fontNamed: "AvenirNext-Medium")
     private var overlay: SKNode?
-    private var gearNode: SKLabelNode?
-    private var leaderboardNode: SKLabelNode?
+    private var gearNode: SKShapeNode?
+    private var leaderboardNode: SKShapeNode?
     private var playButton: SKNode?
     private var zenButton: SKNode?
     private var menuButton: SKLabelNode?
-    private var pauseButton: SKLabelNode?
-    private var tipLine: SKLabelNode?
+    private var pauseButton: SKShapeNode?
+    private var tipLine: SKShapeNode?
     /// Small "ZEN" badge under the score during zen runs, so the player always
     /// knows whether the run counts for the leaderboard. Ranked is the default
     /// and gets no badge — labeling the exception is enough.
@@ -463,7 +463,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         playButton = play
 
         let zenBlue = SKColor(red: 0.55, green: 0.8, blue: 0.95, alpha: 1)
-        let zen = makePill(text: "🧘 ZEN", name: "zen",
+        let zen = makePill(text: "ZEN", name: "zen", symbol: "leaf.fill",
                            fill: SKColor(white: 0, alpha: 0.3),
                            stroke: zenBlue,
                            textColor: zenBlue)
@@ -503,13 +503,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     /// Settings gear, top-right, clear of the safe-area inset.
     private func addGear(to node: SKNode) {
-        let gear = SKLabelNode(fontNamed: "AvenirNext-Regular")
-        gear.text = "⚙"
-        gear.fontSize = 34
-        gear.fontColor = SKColor(white: 0.85, alpha: 1)
-        gear.verticalAlignmentMode = .center
-        gear.position = CGPoint(x: size.width / 2 - 36, y: size.height / 2 - topInset - 16)
-        gear.name = "gear"
+        let gear = SceneIcons.cornerButton("gearshape.fill", color: cornerIconWhite, name: "gear")
+        gear.position = CGPoint(x: size.width / 2 - 36, y: cornerButtonY)
         markButton(gear, label: "Settings")
         node.addChild(gear)
         gearNode = gear
@@ -517,22 +512,24 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     /// Leaderboard button, top-left, mirroring the gear.
     private func addLeaderboardButton(to node: SKNode) {
-        let lb = SKLabelNode(fontNamed: "AvenirNext-Regular")
-        lb.text = "🏆"
-        lb.fontSize = 30
-        lb.verticalAlignmentMode = .center
-        lb.horizontalAlignmentMode = .center
-        lb.position = CGPoint(x: -size.width / 2 + 36, y: size.height / 2 - topInset - 16)
-        lb.name = "leaderboard"
+        // Muted gold keeps the trophy's identity without outshining the white set.
+        let gold = SKColor(red: 1.0, green: 0.82, blue: 0.42, alpha: 0.92)
+        let lb = SceneIcons.cornerButton("trophy.fill", color: gold, name: "leaderboard")
+        lb.position = CGPoint(x: -size.width / 2 + 36, y: cornerButtonY)
         markButton(lb, label: "Scores")
         node.addChild(lb)
         leaderboardNode = lb
     }
 
+    private var cornerIconWhite: SKColor { SKColor(white: 1, alpha: 0.85) }
+
+    /// Corner discs sit just under the safe-area inset so their top edge clears it.
+    private var cornerButtonY: CGFloat { size.height / 2 - topInset - 22 }
+
     /// A pill-shaped button: rounded SKShapeNode with a centered label. 56pt
     /// tall (clears the 44pt minimum tap target) and the visible shape IS the
     /// hit area, so affordance and tap target finally coincide.
-    private func makePill(text: String, name: String,
+    private func makePill(text: String, name: String, symbol: String? = nil,
                           fill: SKColor, stroke: SKColor, textColor: SKColor) -> SKNode {
         let pill = SKShapeNode(rectOf: CGSize(width: 220, height: 56), cornerRadius: 28)
         pill.fillColor = fill
@@ -548,6 +545,17 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         label.name = name           // taps on the label count as the button
         label.isAccessibilityElement = false
         pill.addChild(label)
+        if let symbol {
+            let icon = SceneIcons.sprite(symbol, pointSize: 18, weight: .bold, color: textColor)
+            icon.name = name
+            icon.isAccessibilityElement = false
+            let gap: CGFloat = 8
+            let groupWidth = icon.size.width + gap + label.frame.width
+            icon.position = CGPoint(x: -groupWidth / 2 + icon.size.width / 2, y: 0)
+            label.horizontalAlignmentMode = .left
+            label.position = CGPoint(x: -groupWidth / 2 + icon.size.width + gap, y: 0)
+            pill.addChild(icon)
+        }
         markButton(pill, label: text.filter { $0.isLetter || $0 == " " }.trimmingCharacters(in: .whitespaces).capitalized)
         return pill
     }
@@ -565,11 +573,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let p = t.location(in: cam)
         if let gear = gearNode, gear.frame.insetBy(dx: -18, dy: -18).contains(p) {
             HapticsManager.shared.uiTap()
+            SceneIcons.pressDip(gear)
             onOpenSettings?()
             return true
         }
         if let lb = leaderboardNode, lb.frame.insetBy(dx: -18, dy: -18).contains(p) {
             HapticsManager.shared.uiTap()
+            SceneIcons.pressDip(lb)
             onShowLeaderboard?()
             return true
         }
@@ -752,14 +762,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     /// Small pause button, top-right during play (where the gear sits on menus).
     private func addPauseButton() {
         pauseButton?.removeFromParent()
-        let btn = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        btn.text = "❚❚"
-        btn.fontSize = 26
-        btn.fontColor = SKColor(white: 0.9, alpha: 1)
-        btn.verticalAlignmentMode = .center
-        btn.horizontalAlignmentMode = .center
-        btn.position = CGPoint(x: size.width / 2 - 36, y: size.height / 2 - topInset - 16)
-        btn.name = "pause"
+        let btn = SceneIcons.cornerButton("pause.fill", color: cornerIconWhite, name: "pause",
+                                          pointSize: 20)
+        btn.position = CGPoint(x: size.width / 2 - 36, y: cornerButtonY)
         markButton(btn, label: "Pause")
         btn.zPosition = 15
         cam.addChild(btn)
@@ -955,11 +960,28 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     /// A footnote-sized line near the bottom, faded in after the death moment has passed,
     /// so it reads as an aside rather than part of the game-over message.
     private func addTipLine(to node: SKNode) {
-        let line = SKLabelNode(fontNamed: "AvenirNext-Medium")
-        line.text = "Enjoying Drop? Leave a tip ☕"
-        line.fontSize = 16
-        line.fontColor = SKColor(red: 1.0, green: 0.68, blue: 0.76, alpha: 1)
-        line.verticalAlignmentMode = .center
+        let pink = SKColor(red: 1.0, green: 0.68, blue: 0.76, alpha: 1)
+        let text = SKLabelNode(fontNamed: "AvenirNext-Medium")
+        text.text = "Enjoying Drop? Leave a tip"
+        text.fontSize = 16
+        text.fontColor = pink
+        text.verticalAlignmentMode = .center
+        text.horizontalAlignmentMode = .left
+        text.isAccessibilityElement = false
+        let cup = SceneIcons.sprite("cup.and.saucer.fill", pointSize: 14, color: pink)
+        cup.isAccessibilityElement = false
+        let gap: CGFloat = 6
+        let width = text.frame.width + gap + cup.size.width
+        text.position = CGPoint(x: -width / 2, y: 0)
+        cup.position = CGPoint(x: width / 2 - cup.size.width / 2, y: 1)
+
+        // An invisible rect is the accessible, tappable node so its frame spans text and cup.
+        let line = SKShapeNode(rectOf: CGSize(width: width, height: 24))
+        line.fillColor = .clear
+        line.strokeColor = .clear
+        line.lineWidth = 0
+        line.addChild(text)
+        line.addChild(cup)
         line.position = CGPoint(x: 0, y: -size.height / 2 + 72)
         line.name = "tipline"
         markButton(line, label: "Leave a tip")
