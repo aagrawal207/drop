@@ -154,6 +154,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     /// knows whether the run counts for the leaderboard. Ranked is the default
     /// and gets no badge — labeling the exception is enough.
     private let modeBadge = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+    private let effects = GameEffects()
 
     // Cached procedural textures.
     private lazy var plankTexture = WoodTexture.plank(width: size.width, height: floorHeight)
@@ -176,6 +177,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         setupWalls()
         setupBall()
         setupScoreLabel()
+        effects.attach(to: self, camera: cam)
         startMotion()
         HapticsManager.shared.prepare()
 
@@ -871,6 +873,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         comboLabel.isHidden = true
         modeBadge.isHidden = true   // the overlay's "ZEN OVER" title carries the mode
         HapticsManager.shared.gameOver()
+        effects.playDeath(at: ball.position, ballSprite: ballSprite)
 
         // Lifetime time played (both modes) — the part not already banked at pause.
         bankPlaytime()
@@ -1101,6 +1104,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     override func didFinishUpdate() {
+        effects.updateDanger(active: state == .playing, ballTop: ball.position.y + ballRadius, viewTop: viewTop)
         guard state == .playing else { return }
 
         // Steering, applied after physics so it isn't fighting the solver
@@ -1150,6 +1154,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         if clean {
             cleanStreak += 1
             bestStreakThisRun = max(bestStreakThisRun, cleanStreak)
+            effects.cleanPass(at: CGPoint(x: ball.position.x, y: floor.position.y),
+                              streak: cleanStreak, bonusLive: cleanStreak >= streakBonusThreshold)
             if mode == .ranked {
                 GameSettings.shared.totalCleanPasses += 1   // lifetime stat (Scores sheet)
             }
@@ -1171,6 +1177,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             let bonus = cleanStreak - (streakBonusThreshold - 1)
             comboLabel.isHidden = false
             comboLabel.text = "STREAK ×\(cleanStreak)   +\(bonus)"
+            comboLabel.fontColor = GameEffects.streakColor(cleanStreak)
             comboLabel.removeAllActions()
             comboLabel.setScale(1.15)
             comboLabel.run(.scale(to: 1.0, duration: 0.15))
@@ -1183,7 +1190,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         // something (floor landings and wall smacks, in didBegin). Sound does
         // mark the score, though: it plays `gained` rising blips (+1/+2/+3) or a
         // single celebratory chime for a big jump (+4 or more).
-        SoundManager.shared.score(gained: gained)
+        SoundManager.shared.score(gained: gained, streak: cleanStreak)
+        effects.scoreRose(from: score - gained, to: score)
 
         if score >= nextMilestone {
             nextMilestone += milestoneEvery
