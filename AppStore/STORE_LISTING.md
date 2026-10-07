@@ -31,7 +31,9 @@ Features:
 - Tilt to steer, one-handed and simple
 - Two modes: ranked play that speeds up, and relaxing Zen mode
 - Clean-pass streak bonus for big scores
-- The ball transforms as you climb: basketball at 100, baseball at 500, soccer ball at 1000 and more
+- The ball transforms as you climb: basketball at 100, baseball at 500, soccer ball at 1000 and more. Every ball you reach stays unlocked to pick
+- Deeper runs mix in narrow, double and sliding gaps
+- A best drop line shows how far you got last time
 - Game Center leaderboard, optional, plays fine without signing in
 - Haptics and a wood-knock bounce sound that follow how hard you land
 - Adjustable sensitivity and bounciness
@@ -41,9 +43,12 @@ Features:
 Made by one person. If you hit a bug or have an idea, open an issue on GitHub.
 
 ## What's New (v1.3)
-- Rate Drop any time from Settings.
-- After a good run, regular players may see a quiet link to leave a tip. It never interrupts play.
-- Small polish and fixes.
+- Unlock new balls by playing, then pick your favorite. Tap the ball in the title to switch.
+- A line marks your best drop, so you can see it coming.
+- Game over now tells you how close you came.
+- Deeper runs bring narrow, double and sliding gaps.
+- Clean passes kick up wood chips, big scores get a moment, and the top edge glows when you're in danger.
+- Fresh icons, and Rate Drop in Settings.
 
 ## Screenshots
 Six captioned slides per device, composed by `tools/compose_store_screenshots.py` from real
