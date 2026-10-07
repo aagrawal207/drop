@@ -12,7 +12,6 @@ final class GameEffects {
     private weak var milestoneLabel: SKLabelNode?
 
     // Tuning.
-    private let milestoneEvery = 50
     /// Fraction of the view height, measured from the top edge, where the glow starts.
     private let dangerZone: CGFloat = 0.25
     private let dangerMaxAlpha: CGFloat = 0.55
@@ -62,10 +61,27 @@ final class GameEffects {
 
     // MARK: - Milestones
 
-    /// Celebrates each 50-point boundary once, even when a bonus jumps the score across it.
+    /// Streak bonuses grow per floor, so a fixed step would fire every couple of seconds on a
+    /// good run; the ladder widens so each moment still feels earned.
+    static let milestoneLadder: [(below: Int, step: Int)] = [
+        (500, 50), (1_000, 100), (5_000, 250), (20_000, 1_000), (100_000, 5_000), (.max, 25_000),
+    ]
+
+    /// The highest ladder value at or below `score`, or 0 before the first one.
+    static func milestone(atOrBelow score: Int) -> Int {
+        var floor = 0
+        for (below, step) in milestoneLadder {
+            let top = min(score, below - 1)
+            if top >= floor { floor = max(floor, (top / step) * step) }
+            if score < below { break }
+        }
+        return floor
+    }
+
+    /// Fires once per ladder value crossed, even when a bonus jumps several at once.
     func scoreRose(from old: Int, to new: Int) {
-        guard new / milestoneEvery > old / milestoneEvery, new > 0 else { return }
-        let reached = (new / milestoneEvery) * milestoneEvery
+        let reached = Self.milestone(atOrBelow: new)
+        guard reached > 0, reached > Self.milestone(atOrBelow: old) else { return }
         showMilestone(reached)
         SoundManager.shared.milestone()
         HapticsManager.shared.milestone()
@@ -77,6 +93,9 @@ final class GameEffects {
         let label = SKLabelNode(fontNamed: "AvenirNext-Heavy")
         label.text = "\(value)"
         label.fontSize = min(scene.size.width * 0.38, 200)
+        // Long numbers shrink to fit; the label grows to 1.15x, so leave that headroom.
+        let fit = scene.size.width * 0.8 / 1.15
+        if label.frame.width > fit { label.fontSize *= fit / label.frame.width }
         label.fontColor = SKColor(red: 1.0, green: 0.86, blue: 0.62, alpha: 1)
         label.verticalAlignmentMode = .center
         label.position = CGPoint(x: 0, y: scene.size.height * 0.08)
