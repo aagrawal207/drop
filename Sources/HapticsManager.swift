@@ -207,6 +207,45 @@ final class HapticsManager {
         }
     }
 
+    /// Every-50 milestone: two rising taps, firmer than a landing so it reads as a reward.
+    func milestone() {
+        taps([(0.55, 0.45, 0), (0.9, 0.7, 0.09)], fallback: mediumImpact)
+    }
+
+    /// A light double tap for small celebrations (such as a new best).
+    func celebrate() {
+        taps([(0.45, 0.6, 0), (0.55, 0.6, 0.1)], fallback: lightImpact)
+    }
+
+    /// Transients as (intensity, sharpness, time). The UIKit fallback replays each on the
+    /// same schedule so the rhythm survives on devices without Core Haptics.
+    private func taps(_ hits: [(Float, Float, TimeInterval)], fallback: UIImpactFeedbackGenerator) {
+        guard GameSettings.shared.hapticsEnabled else { return }
+        func fallbackTaps() {
+            for (intensity, _, time) in hits {
+                DispatchQueue.main.asyncAfter(deadline: .now() + time) {
+                    guard GameSettings.shared.hapticsEnabled else { return }
+                    fallback.impactOccurred(intensity: CGFloat(intensity))
+                    fallback.prepare()
+                }
+            }
+        }
+        guard let engine = runningEngine() else { fallbackTaps(); return }
+        let events = hits.map { intensity, sharpness, time in
+            CHHapticEvent(eventType: .hapticTransient, parameters: [
+                CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity),
+                CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness)
+            ], relativeTime: time)
+        }
+        do {
+            let pattern = try CHHapticPattern(events: events, parameters: [])
+            let player = try engine.makePlayer(with: pattern)
+            try player.start(atTime: 0)
+        } catch {
+            fallbackTaps()
+        }
+    }
+
     /// UI taps (buttons).
     func uiTap() {
         transient(intensity: 0.5, sharpness: 0.8, fallback: lightImpact)

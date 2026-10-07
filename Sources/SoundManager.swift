@@ -21,8 +21,15 @@ final class SoundManager {
     private var sessionActive = false
 
     // Pre-rendered buffers.
-    private var blips: [AVAudioPCMBuffer] = []   // rising notes for +1/+2/+3
-    private var chime: AVAudioPCMBuffer!         // the "big" sound for +4 and up
+    /// Rising notes for +1/+2/+3, one set per streak pitch level (see streakSemitones).
+    private var blipSets: [[AVAudioPCMBuffer]] = []
+    /// The "big" sound for +4 and up, per streak pitch level.
+    private var chimes: [AVAudioPCMBuffer] = []
+    /// The every-50 milestone: a two-note rising bell.
+    private var milestoneChime: AVAudioPCMBuffer!
+    /// Pitch offset per streak level. Scale steps rather than semitones keep a long streak
+    /// sounding musical, and the cap stops it climbing into a shrill register.
+    private let streakSemitones: [Double] = [0, 2, 4, 5, 7, 9]
     /// Wooden toks at three impact intensities (soft / medium / hard). A hard
     /// hit isn't just louder — it's brighter and rings a touch longer, which is
     /// how the ear judges impact energy. Selected by impact speed in bounce().
@@ -61,13 +68,16 @@ final class SoundManager {
 
     /// Play the score sound for a points gain. +1/+2/+3 play a soft rising pip
     /// that many times; a jump of +4 or more plays one mellow "done" note. Kept
-    /// gentle on purpose — a quiet tick, not a slot-machine payout.
-    func score(gained: Int) {
+    /// gentle on purpose — a quiet tick, not a slot-machine payout. Both rise in pitch from
+    /// the 3rd clean pass in a row, so a building streak is audible.
+    func score(gained: Int, streak: Int = 0) {
         guard GameSettings.shared.scoreSoundEnabled, gained > 0 else { return }
+        let level = min(max(streak - 2, 0), streakSemitones.count - 1)
         if gained >= 4 {
-            play(chime, volume: 0.4)
+            play(chimes[level], volume: 0.4)
             return
         }
+        let blips = blipSets[level]
         let n = min(gained, blips.count)           // 1...3
         for i in 0..<n {
             let buf = blips[i]
@@ -81,6 +91,14 @@ final class SoundManager {
                 }
             }
         }
+    }
+
+    /// Every-50 milestone bell. Gated on either sound toggle: a player who muted only the
+    /// score pips still hears the game, and one who muted both hears nothing.
+    func milestone() {
+        let settings = GameSettings.shared
+        guard settings.scoreSoundEnabled || settings.bounceSoundEnabled else { return }
+        play(milestoneChime, volume: 0.32)
     }
 
     /// Play the bounce "tok". Two things scale with impact speed so big bounces
@@ -175,18 +193,23 @@ final class SoundManager {
     // MARK: - Synthesis
 
     private func renderBuffers() {
-        // Rising major triad — C5, E5, G5. The first `gained` of these play for a
-        // Soft rising pips for +1/+2/+3. Pure sines (no bright upper harmonic),
-        // a warm mid register, and gentle whole-tone steps — so a streak nudges
-        // upward rather than pinging like coins. Rounded attack, short decay.
-        blips = [392.00, 440.00, 493.88].map { f in   // G4, A4, B4
-            tone(partials: [(f, 0.8)], duration: 0.15, decay: 17, attack: 0.010)
+        // Soft rising pips for +1/+2/+3. Pure sines in a warm mid register with
+        // whole-tone steps, so a streak nudges upward rather than pinging like coins.
+        for semis in streakSemitones {
+            let k = pow(2, semis / 12)
+            blipSets.append([392.00, 440.00, 493.88].map { f in   // G4, A4, B4
+                tone(partials: [(f * k, 0.8)], duration: 0.15, decay: 17, attack: 0.010)
+            })
+            // The "+4 or more" sound: a single mellow note (root + a quiet fifth for
+            // warmth), same register as the pips so it reads as a soft resolution.
+            chimes.append(tone(partials: [(523.25 * k, 0.7), (784.00 * k, 0.18)],   // C5 + soft G5
+                               duration: 0.42, decay: 9, attack: 0.010))
         }
-        // The "+4 or more" sound: a single mellow note (root + a quiet fifth for
-        // warmth), same register as the pips so it reads as a soft resolution,
-        // not a jackpot sparkle.
-        chime = tone(partials: [(523.25, 0.7), (784.00, 0.18)],   // C5 + soft G5
-                     duration: 0.42, decay: 9, attack: 0.010)
+        // An octave above the pips so it stands apart from scoring, with a faint octave
+        // partial for a bell edge; slow decay lets the second note ring out.
+        milestoneChime = notes([(783.99, 0), (1046.50, 0.09)],   // G5 then C6
+                               partials: [(1, 0.55), (2, 0.08)],
+                               duration: 0.6, decay: 7, attack: 0.006)
         // Wooden "tok" at three intensities. All share the low ~196 Hz body so
         // they read as the same object; what changes is brightness (upper
         // partials), length, and decay — a soft graze is dull and dead, a hard
@@ -203,6 +226,33 @@ final class SoundManager {
             tone(partials: [(185, 0.7), (300, 0.30), (470, 0.22), (760, 0.12)],
                  duration: 0.13, decay: 26, attack: 0.001),
         ]
+    }
+
+    /// Notes struck at onsets (seconds), each with partials given as (frequency multiple, amp)
+    /// under its own attack/decay envelope, mixed into one buffer.
+    private func notes(_ notes: [(Double, Double)],
+                       partials: [(Double, Double)],
+                       duration: Double,
+                       decay: Double,
+                       attack: Double) -> AVAudioPCMBuffer {
+        let sr = format.sampleRate
+        let frames = AVAudioFrameCount(duration * sr)
+        let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
+        buf.frameLength = frames
+        let out = buf.floatChannelData![0]
+        for i in 0..<Int(frames) {
+            let t = Double(i) / sr
+            var v = 0.0
+            for (f, onset) in notes where t >= onset {
+                let lt = t - onset
+                let env = min(lt / attack, 1.0) * exp(-decay * lt)
+                for (mult, amp) in partials {
+                    v += amp * env * sin(2.0 * .pi * f * mult * lt)
+                }
+            }
+            out[i] = Float(v)
+        }
+        return buf
     }
 
     /// Sum sine partials under a fast-attack / exponential-decay envelope.
