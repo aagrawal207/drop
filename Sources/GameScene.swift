@@ -75,7 +75,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private let ballSprite = SKSpriteNode()      // glossy sphere (never rotates)
     private let ballShadow = SKSpriteNode()      // soft blob beneath for grounding
     private var floors: [SKNode] = []
-    private var lastGapCenterX: CGFloat = 0
+    /// Rebuilt each run in startGame; the placeholder never generates a floor.
+    private var floorPattern = FloorPatternGenerator(fieldWidth: 0, schedule: .ranked, firstGapX: 0)
+    private var floorRandom = SystemRandomNumberGenerator()
     private var lowestFloorY: CGFloat = 0
     private var camSpeed: CGFloat = 120
     private var scriptedCamY: CGFloat = 0
@@ -347,12 +349,21 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // MARK: - Floor generation
 
-    private func makeFloor(atY y: CGFloat, gapCenterX: CGFloat) -> SKNode {
+    /// Floor userData: "gaps" are hole centres relative to the node (add its live x),
+    /// "gapX" is the first one at rest, "depth" is the floor index this run.
+    private func makeFloor(atY y: CGFloat, spec: FloorSpec, depth: Int) -> SKNode {
         let node = SKNode()
-        node.position = CGPoint(x: 0, y: y)
+        node.position = CGPoint(x: spec.slideOffset(at: elapsed), y: y)
 
-        let gapLeft = gapCenterX - gapWidth / 2
-        let gapRight = gapCenterX + gapWidth / 2
+        // Sliding floors carry plank past both walls so their travel never opens an edge.
+        let overhang = spec.slideAmplitude > 0 ? spec.slideAmplitude + 40 : 0
+        let gaps = spec.gapCenters.sorted()
+        var edges: [CGFloat] = [-overhang]
+        for x in gaps {
+            edges.append(x - spec.gapWidth / 2)
+            edges.append(x + spec.gapWidth / 2)
+        }
+        edges.append(size.width + overhang)
 
         var bodies: [SKPhysicsBody] = []
         func segment(x: CGFloat, width: CGFloat) {
@@ -366,8 +377,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             b.restitution = 0.3
             bodies.append(b)
         }
-        segment(x: gapLeft / 2, width: gapLeft)
-        segment(x: gapRight + (size.width - gapRight) / 2, width: size.width - gapRight)
+        for i in stride(from: 0, to: edges.count - 1, by: 2) {
+            segment(x: (edges[i] + edges[i + 1]) / 2, width: edges[i + 1] - edges[i])
+        }
 
         let body = SKPhysicsBody(bodies: bodies)
         body.isDynamic = false
@@ -375,31 +387,41 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         body.friction = 0.3
         body.restitution = 0.3
         node.physicsBody = body
-        node.userData = ["scored": false, "gapX": gapCenterX]
+        var data: [String: Any] = ["scored": false, "gapX": gaps[0], "gaps": gaps, "depth": depth]
+        if spec.slideAmplitude > 0 {
+            data["slideAmp"] = spec.slideAmplitude
+            data["slidePeriod"] = spec.slidePeriod
+            data["slidePhase"] = spec.slidePhase
+        }
+        node.userData = NSMutableDictionary(dictionary: data)
         return node
-    }
-
-    private func nextGapCenterX(from previous: CGFloat) -> CGFloat {
-        // Keep the next gap reachable: bound the horizontal step.
-        let maxStep = size.width * 0.34
-        let low = max(gapWidth / 2 + sideMargin, previous - maxStep)
-        let high = min(size.width - gapWidth / 2 - sideMargin, previous + maxStep)
-        // Degenerate scenes (width < gap + margins) invert the range, and
-        // CGFloat.random(in:) traps on an empty range. Center the gap instead.
-        guard low <= high else { return size.width / 2 }
-        return CGFloat.random(in: low...high)
     }
 
     /// Ensure floors exist from just above the view down to below its bottom.
     private func fillFloorsBelow() {
         while lowestFloorY > viewBottom - floorSpacing {
-            let gapX = nextGapCenterX(from: lastGapCenterX)
+            let depth = floorPattern.depth
+            let spec = floorPattern.next(using: &floorRandom)
             let y = lowestFloorY - floorSpacing
-            let floor = makeFloor(atY: y, gapCenterX: gapX)
+            let floor = makeFloor(atY: y, spec: spec, depth: depth)
             addChild(floor)
             floors.append(floor)
             lowestFloorY = y
-            lastGapCenterX = gapX
+        }
+    }
+
+    /// Glide sliding floors before the physics step. A scored floor freezes so its
+    /// hole edge never sweeps into a ball that is still passing through.
+    private func slideFloors() {
+        for floor in floors {
+            guard let data = floor.userData,
+                  let amp = data["slideAmp"] as? CGFloat,
+                  let period = data["slidePeriod"] as? Double,
+                  let phase = data["slidePhase"] as? Double,
+                  data["scored"] as? Bool == false else { continue }
+            let spec = FloorSpec(kind: .sliding, gapCenters: [], gapWidth: 0,
+                                 slideAmplitude: amp, slidePeriod: period, slidePhase: phase)
+            floor.position.x = spec.slideOffset(at: elapsed)
         }
     }
 
@@ -732,11 +754,14 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let startX = size.width / 2 + titleBallOffsetX
         cam.position = CGPoint(x: size.width / 2, y: 0)
         scriptedCamY = 0
-        lastGapCenterX = startX
         lowestFloorY = 0
+        floorPattern = FloorPatternGenerator(fieldWidth: size.width,
+                                             schedule: mode == .zen ? .zen : .ranked,
+                                             firstGapX: startX, standardGapWidth: gapWidth,
+                                             sideMargin: sideMargin)
 
         let firstY = -size.height * 0.10
-        let first = makeFloor(atY: firstY, gapCenterX: startX)
+        let first = makeFloor(atY: firstY, spec: .standard(at: startX, gapWidth: gapWidth), depth: 0)
         addChild(first)
         floors.append(first)
         lowestFloorY = firstY
@@ -1061,8 +1086,11 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         if debugAutopilotUntil > 0, score >= debugAutopilotUntil { return 0 }
         let below = floors.filter { $0.position.y < ball.position.y - ballRadius }
         guard let next = below.max(by: { $0.position.y < $1.position.y }),
-              let gapX = next.userData?["gapX"] as? CGFloat else { return 0 }
-        return max(-1, min(1, (gapX - ball.position.x) / 50))
+              let gaps = next.userData?["gaps"] as? [CGFloat],
+              let target = gaps.map({ $0 + next.position.x })
+                .min(by: { abs($0 - ball.position.x) < abs($1 - ball.position.x) })
+        else { return 0 }
+        return max(-1, min(1, (target - ball.position.x) / 50))
     }
     #endif
 
@@ -1086,6 +1114,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         // Ranked ramps up fast; Zen ramps too, but glacially (see zenCamSpeed).
         camSpeed = mode == .zen ? zenCamSpeed(for: elapsed)
                                 : camSpeed(for: elapsed)
+        slideFloors()
 
         // The camera descends at a steady, ever-increasing rate so the floors
         // scroll up consistently regardless of what the ball is doing — the
