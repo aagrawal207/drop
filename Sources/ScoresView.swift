@@ -10,6 +10,7 @@ struct ScoresView: View {
     var onDone: () -> Void
 
     private let settings = GameSettings.shared
+    private let records = RunRecords.shared
 
     var body: some View {
         NavigationStack {
@@ -27,6 +28,15 @@ struct ScoresView: View {
                     Text("Best Scores")
                 } footer: {
                     Text("Ranked is the classic speed-up mode and the only one that counts on the global leaderboard. Zen starts at a speed you choose and climbs only very gently. Times show how long that best run lasted.")
+                }
+
+                if hasTopRuns {
+                    Section {
+                        topRunsRow(title: "Ranked", icon: "trophy.fill", tint: .orange, mode: .ranked)
+                        topRunsRow(title: "Zen", icon: "leaf.fill", tint: .green, mode: .zen)
+                    } header: {
+                        Text("Top Runs")
+                    }
                 }
 
                 Section {
@@ -81,6 +91,34 @@ struct ScoresView: View {
             }
         }
         .padding(.vertical, 2)
+    }
+
+    private var hasTopRuns: Bool {
+        RunMode.allCases.contains { !records.topScores(for: $0).isEmpty }
+    }
+
+    @ViewBuilder
+    private func topRunsRow(title: String, icon: String, tint: Color, mode: RunMode) -> some View {
+        let top = records.topScores(for: mode)
+        if !top.isEmpty {
+            let deepest = records.deepestFloor(for: mode)
+            HStack(alignment: .firstTextBaseline) {
+                Label(title, systemImage: icon)
+                    .foregroundStyle(tint)
+                Spacer()
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(top.map(String.init).joined(separator: "  "))
+                        .monospacedDigit()
+                    if deepest > 0 {
+                        Text("Deepest: \(deepest) \(deepest == 1 ? "floor" : "floors")")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+            }
+            .padding(.vertical, 2)
+        }
     }
 
     private func statRow(_ title: String, value: String) -> some View {
