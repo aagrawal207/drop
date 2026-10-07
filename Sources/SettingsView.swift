@@ -9,7 +9,7 @@ struct SettingsView: View {
     @State private var hapticsEnabled = GameSettings.shared.hapticsEnabled
     @State private var scoreSoundEnabled = GameSettings.shared.scoreSoundEnabled
     @State private var bounceSoundEnabled = GameSettings.shared.bounceSoundEnabled
-    @State private var ballColorEnabled = GameSettings.shared.ballColorEnabled
+    @State private var ballSkin = BallSkins.shared.selection
     @State private var tutorialQueued = !GameSettings.shared.hasSeenTutorial
     @State private var showTipJar = false
 
@@ -79,12 +79,20 @@ struct SettingsView: View {
                         .onChange(of: scoreSoundEnabled) { _, v in GameSettings.shared.scoreSoundEnabled = v }
                     Toggle("Bounce Sound", isOn: $bounceSoundEnabled)
                         .onChange(of: bounceSoundEnabled) { _, v in GameSettings.shared.bounceSoundEnabled = v }
-                    Toggle("Ball Color Changes", isOn: $ballColorEnabled)
-                        .onChange(of: ballColorEnabled) { _, v in GameSettings.shared.ballColorEnabled = v }
                 } header: {
                     Text("Feedback")
                 } footer: {
-                    Text("Bounce Sound is a wood knock that gets louder the harder the ball lands. Score Sound plays soft blips as points come in. The ball changes look at score milestones, starting at 100; climb far enough and it becomes a whole different ball. Turn this off to stay red.")
+                    Text("Bounce Sound is a wood knock that gets louder the harder the ball lands. Score Sound plays soft blips as points come in.")
+                }
+
+                Section {
+                    BallSkinPicker(selection: $ballSkin)
+                        .padding(.vertical, 4)
+                        .onChange(of: ballSkin) { _, v in BallSkins.shared.selection = v }
+                } header: {
+                    Text("Ball")
+                } footer: {
+                    Text("Reach a score in either mode to unlock that ball for good. Evolving starts red and changes as your score climbs. You can also tap the ball in the title to switch.")
                 }
 
                 Section {
@@ -222,5 +230,77 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// Evolving plus every tier, locked ones dimmed with the score that unlocks them.
+private struct BallSkinPicker: View {
+    @Binding var selection: BallSkinChoice
+
+    // Rendered once per launch; the procedural balls are too costly to redraw per body pass.
+    private static let thumbnails: [UIImage] = BallPalette.tiers.indices.map {
+        BallPalette.image(tier: $0, radius: 18)
+    }
+
+    private let columns = [GridItem(.adaptive(minimum: 64), spacing: 8)]
+
+    var body: some View {
+        let skins = BallSkins.shared
+        LazyVGrid(columns: columns, spacing: 12) {
+            cell(.evolving, caption: "Evolving", unlocked: true)
+            ForEach(BallPalette.tiers.indices, id: \.self) { tier in
+                let unlocked = skins.isUnlocked(tier)
+                cell(.fixed(tier: tier),
+                     caption: unlocked ? BallSkins.name(forTier: tier)
+                                       : "Reach \(BallSkins.unlockScore(forTier: tier).formatted())",
+                     unlocked: unlocked)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func cell(_ choice: BallSkinChoice, caption: String, unlocked: Bool) -> some View {
+        let selected = choice == selection
+        let content = VStack(spacing: 4) {
+            ZStack {
+                Image(uiImage: Self.thumbnails[choice.startTier])
+                    .resizable()
+                    .frame(width: 36, height: 36)
+                    .opacity(unlocked ? 1 : 0.3)
+                if choice == .evolving {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white, .orange)
+                        .offset(x: 14, y: 14)
+                } else if !unlocked {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                Circle()
+                    .stroke(selected ? Color.accentColor : .clear, lineWidth: 3)
+                    .frame(width: 46, height: 46)
+            }
+            .frame(width: 48, height: 48)
+            Text(caption)
+                .font(.caption2)
+                .foregroundStyle(unlocked ? .primary : .secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .contentShape(Rectangle())
+
+        if unlocked {
+            Button { selection = choice } label: { content }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(choice == .evolving ? "Evolving, changes as you climb" : choice.name)
+                .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        } else {
+            content
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(choice.name), locked, reach \(BallSkins.unlockScore(forTier: choice.startTier).formatted())")
+        }
     }
 }

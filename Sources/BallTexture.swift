@@ -8,6 +8,10 @@ enum BallTexture {
 
     /// The classic red ball (tier 0). Exact colours preserved.
     static func glossyRed(radius: CGFloat) -> SKTexture {
+        SKTexture(image: glossyRedImage(radius: radius))
+    }
+
+    static func glossyRedImage(radius: CGFloat) -> UIImage {
         render(radius: radius,
                lit: UIColor(red: 1.00, green: 0.42, blue: 0.38, alpha: 1),
                mid: UIColor(red: 0.86, green: 0.16, blue: 0.14, alpha: 1),
@@ -18,6 +22,10 @@ enum BallTexture {
     /// stops are derived from the tint in HSB, so every colour tier keeps the same
     /// shaded, shiny look as the red one.
     static func glossy(radius: CGFloat, tint: UIColor) -> SKTexture {
+        SKTexture(image: glossyImage(radius: radius, tint: tint))
+    }
+
+    static func glossyImage(radius: CGFloat, tint: UIColor) -> UIImage {
         var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         tint.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
         let lit = UIColor(hue: h, saturation: max(0, s * 0.42),
@@ -27,7 +35,7 @@ enum BallTexture {
         return render(radius: radius, lit: lit, mid: tint, shadow: shadow)
     }
 
-    private static func render(radius: CGFloat, lit: UIColor, mid: UIColor, shadow: UIColor) -> SKTexture {
+    private static func render(radius: CGFloat, lit: UIColor, mid: UIColor, shadow: UIColor) -> UIImage {
         let scale: CGFloat = 3                       // crisp on retina
         let d = radius * 2
         let size = CGSize(width: d, height: d)
@@ -73,7 +81,7 @@ enum BallTexture {
             }
             ctx.restoreGState()
         }
-        return SKTexture(image: image)
+        return image
     }
 
     /// A soft blurred shadow blob to sit beneath the ball for grounding.
@@ -114,18 +122,34 @@ enum BallTexture {
     /// keep the two in sync.
 
     static func basketball(radius: CGFloat) -> SKTexture {
-        renderPatterned(radius: radius, paint: paintBasketball)
+        SKTexture(image: basketballImage(radius: radius))
     }
     static func baseball(radius: CGFloat) -> SKTexture {
-        renderPatterned(radius: radius, paint: paintBaseball)
+        SKTexture(image: baseballImage(radius: radius))
     }
     static func soccer(radius: CGFloat) -> SKTexture {
-        renderPatterned(radius: radius, paint: paintSoccer)
+        SKTexture(image: soccerImage(radius: radius))
     }
     static func bowling(radius: CGFloat) -> SKTexture {
-        renderPatterned(radius: radius, paint: paintBowling)
+        SKTexture(image: bowlingImage(radius: radius))
     }
     static func blackhole(radius: CGFloat) -> SKTexture {
+        SKTexture(image: blackholeImage(radius: radius))
+    }
+
+    static func basketballImage(radius: CGFloat) -> UIImage {
+        renderPatterned(radius: radius, paint: paintBasketball)
+    }
+    static func baseballImage(radius: CGFloat) -> UIImage {
+        renderPatterned(radius: radius, paint: paintBaseball)
+    }
+    static func soccerImage(radius: CGFloat) -> UIImage {
+        renderPatterned(radius: radius, paint: paintSoccer)
+    }
+    static func bowlingImage(radius: CGFloat) -> UIImage {
+        renderPatterned(radius: radius, paint: paintBowling)
+    }
+    static func blackholeImage(radius: CGFloat) -> UIImage {
         // No sphere lighting: a black hole has no surface to catch a specular;
         // its accretion ring is the only light source.
         renderPatterned(radius: radius, lighting: false, paint: paintBlackhole)
@@ -137,7 +161,7 @@ enum BallTexture {
     /// painting so pattern math matches the preview script. `lighting: false`
     /// skips the shade/specular for self-lit balls (the black hole).
     private static func renderPatterned(radius: CGFloat, lighting: Bool = true,
-                                        paint: (CGContext, CGFloat) -> Void) -> SKTexture {
+                                        paint: (CGContext, CGFloat) -> Void) -> UIImage {
         let scale: CGFloat = 3
         let d = radius * 2
         let size = CGSize(width: d, height: d)
@@ -152,7 +176,7 @@ enum BallTexture {
             ctx.scaleBy(x: 1, y: -1)
             applySphereEffect(ctx, d: d, lighting: lighting, paint: paint)
         }
-        return SKTexture(image: image)
+        return image
     }
 
     /// Shared by the game and (copy-pasted) the preview script. Y-up context.
@@ -378,17 +402,21 @@ enum BallPalette {
     /// Cached texture for a tier (radius is fixed in practice).
     static func texture(tier: Int, radius: CGFloat) -> SKTexture {
         if let cached = cache[tier] { return cached }
-        let tex: SKTexture
-        switch tiers[tier].style {
-        case .classic:         tex = BallTexture.glossyRed(radius: radius)
-        case .tint(let color): tex = BallTexture.glossy(radius: radius, tint: color)
-        case .basketball:      tex = BallTexture.basketball(radius: radius)
-        case .baseball:        tex = BallTexture.baseball(radius: radius)
-        case .soccer:          tex = BallTexture.soccer(radius: radius)
-        case .bowling:         tex = BallTexture.bowling(radius: radius)
-        case .blackhole:       tex = BallTexture.blackhole(radius: radius)
-        }
+        let tex = SKTexture(image: image(tier: tier, radius: radius))
         cache[tier] = tex
         return tex
+    }
+
+    /// Uncached UIKit render of a tier, for SwiftUI thumbnails outside the scene.
+    static func image(tier: Int, radius: CGFloat) -> UIImage {
+        switch tiers[tier].style {
+        case .classic:         return BallTexture.glossyRedImage(radius: radius)
+        case .tint(let color): return BallTexture.glossyImage(radius: radius, tint: color)
+        case .basketball:      return BallTexture.basketballImage(radius: radius)
+        case .baseball:        return BallTexture.baseballImage(radius: radius)
+        case .soccer:          return BallTexture.soccerImage(radius: radius)
+        case .bowling:         return BallTexture.bowlingImage(radius: radius)
+        case .blackhole:       return BallTexture.blackholeImage(radius: radius)
+        }
     }
 }
