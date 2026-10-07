@@ -121,6 +121,11 @@ attach and processing used `asc publish appstore --wait`; metadata comes from
 `AppStore/metadata/` via `asc metadata push`. Profile `WY4QHG6634` uses certificate
 `W7NQ25R66K`, whose key sits in a locked keychain and triggers a password prompt; avoid it.
 
+1.3 (6) followed the same route with `build/release/ExportOptions.plist` (pins `YBW79S2M2T`
+and the profile above): IPA SHA-256 `db3333d2…2dd7cf`, build `ee73043b-d16d-4b6d-b6d2-a31c8ff95610`,
+version `cb800ed3-4778-49ca-940f-577c7715b30b` (copied from 1.2, release after approval),
+submission `b189e26b-c1ce-4ce6-9c00-b8da80b0576e`, submitted 2026-10-07.
+
 ## Export Compliance
 
 Because `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption` is `NO`, App Store Connect won't ask the encryption question at upload. Drop uses no custom encryption — only HTTPS through Apple's frameworks (Game Center) and the Support link opening Safari, which is exempt. Nothing to file.
