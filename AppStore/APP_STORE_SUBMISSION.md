@@ -125,6 +125,11 @@ attach and processing used `asc publish appstore --wait`; metadata comes from
 and the profile above): IPA SHA-256 `db3333d2…2dd7cf`, build `ee73043b-d16d-4b6d-b6d2-a31c8ff95610`,
 version `cb800ed3-4778-49ca-940f-577c7715b30b` (copied from 1.2, release after approval),
 submission `b189e26b-c1ce-4ce6-9c00-b8da80b0576e`, submitted 2026-10-07.
+That submission was cancelled the same day (`review submissions-cancel`; the version went
+`DEVELOPER_REJECTED` within ~15s) and replaced by 1.3 (7) with the skins/records/variety/effects/icons
+update: IPA SHA-256 `b58b1bdb…71eb78a9`, build `0f9160df-f2e6-4cea-8719-ec8ffa432c13`,
+submission `6165954a-3dfa-4c0f-9fca-160e4a590e13`. `publish appstore` re-attached the new build to
+the same version; an immediate `versions view` still showed the old build for a few seconds.
 
 ## Export Compliance
 
